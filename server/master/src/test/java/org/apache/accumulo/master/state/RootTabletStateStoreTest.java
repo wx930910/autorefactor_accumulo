@@ -39,180 +39,186 @@ import org.apache.accumulo.server.master.state.TabletLocationState;
 import org.apache.accumulo.server.master.state.TabletLocationState.BadLocationStateException;
 import org.apache.accumulo.server.master.state.ZooTabletStateStore;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class RootTabletStateStoreTest {
 
-  static class Node {
-    Node(String name) {
-      this.name = name;
-    }
+	static public DistributedStore mockDistributedStore1() {
+		Node mockFieldVariableRoot = new Node("/");
+		DistributedStore mockInstance = Mockito.spy(DistributedStore.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				String path = stubInvo.getArgument(0);
+				Node node = navigate(path, mockFieldVariableRoot);
+				if (node == null)
+					return Collections.emptyList();
+				List<String> children = new ArrayList<>(node.children.size());
+				for (Node child : node.children)
+					children.add(child.name);
+				return children;
+			}).when(mockInstance).getChildren(Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				String path = stubInvo.getArgument(0);
+				String[] parts = path.split("/");
+				String[] parentPath = Arrays.copyOf(parts, parts.length - 1);
+				Node parent = recurse(mockFieldVariableRoot, parentPath, 1);
+				if (parent == null)
+					return null;
+				Node child = parent.find(parts[parts.length - 1]);
+				if (child != null)
+					parent.children.remove(child);
+				return null;
+			}).when(mockInstance).remove(Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				String path = stubInvo.getArgument(0);
+				Node node = navigate(path, mockFieldVariableRoot);
+				if (node != null)
+					return node.value;
+				return null;
+			}).when(mockInstance).get(Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				String path = stubInvo.getArgument(0);
+				byte[] bs = stubInvo.getArgument(1);
+				create(path, mockFieldVariableRoot).value = bs;
+				return null;
+			}).when(mockInstance).put(Mockito.any(), Mockito.any());
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    List<Node> children = new ArrayList<>();
-    String name;
-    byte[] value = {};
+	static private Node create(String path, Node root) {
+		String[] parts = path.split("/");
+		return recurseCreate(root, parts, 1);
+	}
 
-    Node find(String name) {
-      for (Node node : children)
-        if (node.name.equals(name))
-          return node;
-      return null;
-    }
-  }
+	static private Node recurseCreate(Node root, String[] path, int index) {
+		if (path.length == index)
+			return root;
+		Node node = root.find(path[index]);
+		if (node == null) {
+			node = new Node(path[index]);
+			root.children.add(node);
+		}
+		return recurseCreate(node, path, index + 1);
+	}
 
-  static class FakeZooStore implements DistributedStore {
+	static private Node navigate(String path, Node root) {
+		path = path.replaceAll("/$", "");
+		return recurse(root, path.split("/"), 1);
+	}
 
-    Node root = new Node("/");
+	static private Node recurse(Node root, String[] path, int depth) {
+		if (depth == path.length)
+			return root;
+		Node child = root.find(path[depth]);
+		if (child == null)
+			return null;
+		return recurse(child, path, depth + 1);
+	}
 
-    private Node recurse(Node root, String[] path, int depth) {
-      if (depth == path.length)
-        return root;
-      Node child = root.find(path[depth]);
-      if (child == null)
-        return null;
-      return recurse(child, path, depth + 1);
-    }
+	static class Node {
+		Node(String name) {
+			this.name = name;
+		}
 
-    private Node navigate(String path) {
-      path = path.replaceAll("/$", "");
-      return recurse(root, path.split("/"), 1);
-    }
+		List<Node> children = new ArrayList<>();
+		String name;
+		byte[] value = {};
 
-    @Override
-    public List<String> getChildren(String path) {
-      Node node = navigate(path);
-      if (node == null)
-        return Collections.emptyList();
-      List<String> children = new ArrayList<>(node.children.size());
-      for (Node child : node.children)
-        children.add(child.name);
-      return children;
-    }
+		Node find(String name) {
+			for (Node node : children)
+				if (node.name.equals(name))
+					return node;
+			return null;
+		}
+	}
 
-    @Override
-    public void put(String path, byte[] bs) {
-      create(path).value = bs;
-    }
+	@Test
+	public void testFakeZoo() throws DistributedStoreException {
+		DistributedStore store = RootTabletStateStoreTest.mockDistributedStore1();
+		store.put("/a/b/c", "abc".getBytes());
+		byte[] abc = store.get("/a/b/c");
+		assertArrayEquals(abc, "abc".getBytes());
+		byte[] empty = store.get("/a/b");
+		assertArrayEquals(empty, "".getBytes());
+		store.put("/a/b", "ab".getBytes());
+		assertArrayEquals(store.get("/a/b"), "ab".getBytes());
+		store.put("/a/b/b", "abb".getBytes());
+		List<String> children = store.getChildren("/a/b");
+		assertEquals(new HashSet<>(children), new HashSet<>(Arrays.asList("b", "c")));
+		store.remove("/a/b/c");
+		children = store.getChildren("/a/b");
+		assertEquals(new HashSet<>(children), new HashSet<>(Arrays.asList("b")));
+	}
 
-    private Node create(String path) {
-      String[] parts = path.split("/");
-      return recurseCreate(root, parts, 1);
-    }
+	@Test
+	public void testRootTabletStateStore() throws DistributedStoreException {
+		ZooTabletStateStore tstore = new ZooTabletStateStore(RootTabletStateStoreTest.mockDistributedStore1());
+		KeyExtent root = RootTable.EXTENT;
+		String sessionId = "this is my unique session data";
+		TServerInstance server = new TServerInstance(HostAndPort.fromParts("127.0.0.1", 10000), sessionId);
+		List<Assignment> assignments = Collections.singletonList(new Assignment(root, server));
+		tstore.setFutureLocations(assignments);
+		int count = 0;
+		for (TabletLocationState location : tstore) {
+			assertEquals(location.extent, root);
+			assertEquals(location.future, server);
+			assertNull(location.current);
+			count++;
+		}
+		assertEquals(count, 1);
+		tstore.setLocations(assignments);
+		count = 0;
+		for (TabletLocationState location : tstore) {
+			assertEquals(location.extent, root);
+			assertNull(location.future);
+			assertEquals(location.current, server);
+			count++;
+		}
+		assertEquals(count, 1);
+		TabletLocationState assigned = null;
+		try {
+			assigned = new TabletLocationState(root, server, null, null, null, null, false);
+		} catch (BadLocationStateException e) {
+			fail("Unexpected error " + e);
+		}
+		tstore.unassign(Collections.singletonList(assigned), null);
+		count = 0;
+		for (TabletLocationState location : tstore) {
+			assertEquals(location.extent, root);
+			assertNull(location.future);
+			assertNull(location.current);
+			count++;
+		}
+		assertEquals(count, 1);
 
-    private Node recurseCreate(Node root, String[] path, int index) {
-      if (path.length == index)
-        return root;
-      Node node = root.find(path[index]);
-      if (node == null) {
-        node = new Node(path[index]);
-        root.children.add(node);
-      }
-      return recurseCreate(node, path, index + 1);
-    }
+		KeyExtent notRoot = new KeyExtent(TableId.of("0"), null, null);
+		try {
+			tstore.setLocations(Collections.singletonList(new Assignment(notRoot, server)));
+			fail("should not get here");
+		} catch (IllegalArgumentException ex) {
+		}
 
-    @Override
-    public void remove(String path) {
-      String[] parts = path.split("/");
-      String[] parentPath = Arrays.copyOf(parts, parts.length - 1);
-      Node parent = recurse(root, parentPath, 1);
-      if (parent == null)
-        return;
-      Node child = parent.find(parts[parts.length - 1]);
-      if (child != null)
-        parent.children.remove(child);
-    }
+		try {
+			tstore.setFutureLocations(Collections.singletonList(new Assignment(notRoot, server)));
+			fail("should not get here");
+		} catch (IllegalArgumentException ex) {
+		}
 
-    @Override
-    public byte[] get(String path) {
-      Node node = navigate(path);
-      if (node != null)
-        return node.value;
-      return null;
-    }
-  }
+		TabletLocationState broken = null;
+		try {
+			broken = new TabletLocationState(notRoot, server, null, null, null, null, false);
+		} catch (BadLocationStateException e) {
+			fail("Unexpected error " + e);
+		}
+		try {
+			tstore.unassign(Collections.singletonList(broken), null);
+			fail("should not get here");
+		} catch (IllegalArgumentException ex) {
+		}
+	}
 
-  @Test
-  public void testFakeZoo() throws DistributedStoreException {
-    DistributedStore store = new FakeZooStore();
-    store.put("/a/b/c", "abc".getBytes());
-    byte[] abc = store.get("/a/b/c");
-    assertArrayEquals(abc, "abc".getBytes());
-    byte[] empty = store.get("/a/b");
-    assertArrayEquals(empty, "".getBytes());
-    store.put("/a/b", "ab".getBytes());
-    assertArrayEquals(store.get("/a/b"), "ab".getBytes());
-    store.put("/a/b/b", "abb".getBytes());
-    List<String> children = store.getChildren("/a/b");
-    assertEquals(new HashSet<>(children), new HashSet<>(Arrays.asList("b", "c")));
-    store.remove("/a/b/c");
-    children = store.getChildren("/a/b");
-    assertEquals(new HashSet<>(children), new HashSet<>(Arrays.asList("b")));
-  }
-
-  @Test
-  public void testRootTabletStateStore() throws DistributedStoreException {
-    ZooTabletStateStore tstore = new ZooTabletStateStore(new FakeZooStore());
-    KeyExtent root = RootTable.EXTENT;
-    String sessionId = "this is my unique session data";
-    TServerInstance server =
-        new TServerInstance(HostAndPort.fromParts("127.0.0.1", 10000), sessionId);
-    List<Assignment> assignments = Collections.singletonList(new Assignment(root, server));
-    tstore.setFutureLocations(assignments);
-    int count = 0;
-    for (TabletLocationState location : tstore) {
-      assertEquals(location.extent, root);
-      assertEquals(location.future, server);
-      assertNull(location.current);
-      count++;
-    }
-    assertEquals(count, 1);
-    tstore.setLocations(assignments);
-    count = 0;
-    for (TabletLocationState location : tstore) {
-      assertEquals(location.extent, root);
-      assertNull(location.future);
-      assertEquals(location.current, server);
-      count++;
-    }
-    assertEquals(count, 1);
-    TabletLocationState assigned = null;
-    try {
-      assigned = new TabletLocationState(root, server, null, null, null, null, false);
-    } catch (BadLocationStateException e) {
-      fail("Unexpected error " + e);
-    }
-    tstore.unassign(Collections.singletonList(assigned), null);
-    count = 0;
-    for (TabletLocationState location : tstore) {
-      assertEquals(location.extent, root);
-      assertNull(location.future);
-      assertNull(location.current);
-      count++;
-    }
-    assertEquals(count, 1);
-
-    KeyExtent notRoot = new KeyExtent(TableId.of("0"), null, null);
-    try {
-      tstore.setLocations(Collections.singletonList(new Assignment(notRoot, server)));
-      fail("should not get here");
-    } catch (IllegalArgumentException ex) {}
-
-    try {
-      tstore.setFutureLocations(Collections.singletonList(new Assignment(notRoot, server)));
-      fail("should not get here");
-    } catch (IllegalArgumentException ex) {}
-
-    TabletLocationState broken = null;
-    try {
-      broken = new TabletLocationState(notRoot, server, null, null, null, null, false);
-    } catch (BadLocationStateException e) {
-      fail("Unexpected error " + e);
-    }
-    try {
-      tstore.unassign(Collections.singletonList(broken), null);
-      fail("should not get here");
-    } catch (IllegalArgumentException ex) {}
-  }
-
-  // @Test
-  // public void testMetaDataStore() { } // see functional test
+	// @Test
+	// public void testMetaDataStore() { } // see functional test
 }

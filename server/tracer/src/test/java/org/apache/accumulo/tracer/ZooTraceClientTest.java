@@ -20,52 +20,52 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.easymock.EasyMock;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class ZooTraceClientTest {
 
-  /**
-   * An extension on ZooTraceClient which acts as a latch on updateHostsFromZooKeeper using the
-   * provided {@link AtomicBoolean}
-   */
-  private static class UpdateHostsDelegate extends ZooTraceClient {
-    private final AtomicBoolean done;
+	static public ZooTraceClient mockZooTraceClient1(AtomicBoolean done) {
+		AtomicBoolean[] mockFieldVariableDone = new AtomicBoolean[1];
+		ZooTraceClient mockInstance = Mockito.spy(ZooTraceClient.class);
+		mockFieldVariableDone[0] = done;
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				mockFieldVariableDone[0].set(true);
+				return null;
+			}).when(mockInstance).updateHostsFromZooKeeper();
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    private UpdateHostsDelegate(AtomicBoolean done) {
-      this.done = done;
-    }
+	@Test
+	public void testConnectFailureRetries() throws Exception {
+		ZooTraceClient client = EasyMock.createMockBuilder(ZooTraceClient.class)
+				.addMockedMethod("updateHostsFromZooKeeper").createStrictMock();
+		client.setRetryPause(0L);
+		AtomicBoolean done = new AtomicBoolean(false);
 
-    @Override
-    public void updateHostsFromZooKeeper() {
-      this.done.set(true);
-    }
-  }
+		client.updateHostsFromZooKeeper();
+		EasyMock.expectLastCall().andThrow(new RuntimeException()).once();
+		client.updateHostsFromZooKeeper();
+		// Expect the second call to updateHostsFromZooKeeper, but wait for it to fire
+		// before
+		// verification
+		EasyMock.expectLastCall().andDelegateTo(ZooTraceClientTest.mockZooTraceClient1(done));
 
-  @Test
-  public void testConnectFailureRetries() throws Exception {
-    ZooTraceClient client = EasyMock.createMockBuilder(ZooTraceClient.class)
-        .addMockedMethod("updateHostsFromZooKeeper").createStrictMock();
-    client.setRetryPause(0L);
-    AtomicBoolean done = new AtomicBoolean(false);
+		EasyMock.replay(client);
 
-    client.updateHostsFromZooKeeper();
-    EasyMock.expectLastCall().andThrow(new RuntimeException()).once();
-    client.updateHostsFromZooKeeper();
-    // Expect the second call to updateHostsFromZooKeeper, but wait for it to fire before
-    // verification
-    EasyMock.expectLastCall().andDelegateTo(new UpdateHostsDelegate(done));
+		client.setInitialTraceHosts();
 
-    EasyMock.replay(client);
+		while (!done.get()) {
+			// The 2nd call to updateHostsFromZooKeeper is async. Wait for it for fire
+			// before verifying it
+			// was called.
+			Thread.sleep(200);
+		}
 
-    client.setInitialTraceHosts();
+		EasyMock.verify(client);
 
-    while (!done.get()) {
-      // The 2nd call to updateHostsFromZooKeeper is async. Wait for it for fire before verifying it
-      // was called.
-      Thread.sleep(200);
-    }
-
-    EasyMock.verify(client);
-
-  }
+	}
 
 }

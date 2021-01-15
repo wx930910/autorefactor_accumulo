@@ -65,7 +65,7 @@ public class RegExFilterTest {
 		RegExFilter.setRegexs(is, ".*2", null, null, null, false);
 
 		assertTrue(rei.validateOptions(is.getOptions()));
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -80,7 +80,7 @@ public class RegExFilterTest {
 		RegExFilter.setRegexs(is, null, null, null, "amst", false, true); // Should only match hamster
 
 		rei.validateOptions(is.getOptions());
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -93,7 +93,7 @@ public class RegExFilterTest {
 
 		RegExFilter.setRegexs(is, null, "ya.*", null, null, false);
 		assertTrue(rei.validateOptions(is.getOptions()));
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -106,7 +106,7 @@ public class RegExFilterTest {
 
 		RegExFilter.setRegexs(is, null, null, ".*01", null, false);
 		assertTrue(rei.validateOptions(is.getOptions()));
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -119,7 +119,7 @@ public class RegExFilterTest {
 
 		RegExFilter.setRegexs(is, null, null, null, ".*at", false);
 		assertTrue(rei.validateOptions(is.getOptions()));
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -131,7 +131,7 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, null, null, null, ".*ap", false);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertFalse(rei.hasTop());
@@ -140,7 +140,7 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, null, "ya.*", null, ".*at", false);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -152,7 +152,7 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, null, "ya.*", null, ".*ap", false);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertFalse(rei.hasTop());
@@ -161,7 +161,7 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, "boo1", null, null, null, false);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -175,7 +175,7 @@ public class RegExFilterTest {
 		// -----------------------------------------------------
 		is.clearOptions();
 
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -193,7 +193,7 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, "hamster", null, "hamster", "hamster", true);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -205,7 +205,7 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, null, "ya.*", "hamster", null, true);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());
@@ -216,9 +216,9 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, null, "ya.*", "hamster", null, true);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
-		rei.deepCopy(new DefaultIteratorEnvironment());
+		rei.deepCopy(DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
 		// -----------------------------------------------------
 		String multiByteText = new String("\u6d67" + "\u6F68" + "\u7067");
@@ -231,7 +231,7 @@ public class RegExFilterTest {
 		is.clearOptions();
 
 		RegExFilter.setRegexs(is, null, null, null, multiByteRegex, true);
-		rei.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		rei.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		rei.seek(new Range(), EMPTY_COL_FAMS, false);
 
 		assertTrue(rei.hasTop());

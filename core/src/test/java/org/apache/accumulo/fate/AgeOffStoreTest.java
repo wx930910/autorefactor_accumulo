@@ -24,140 +24,142 @@ import java.util.HashSet;
 import org.apache.accumulo.fate.AgeOffStore.TimeSource;
 import org.apache.accumulo.fate.ReadOnlyTStore.TStatus;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class AgeOffStoreTest {
 
-  private static class TestTimeSource implements TimeSource {
-    long time = 0;
+	@Test
+	public void testBasic() {
 
-    @Override
-    public long currentTimeMillis() {
-      return time;
-    }
+		TimeSource tts = Mockito.spy(TimeSource.class);
+		long[] ttsTime = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return ttsTime[0];
+			}).when(tts).currentTimeMillis();
+		} catch (Exception exception) {
+		}
+		TStore<String> sstore = SimpleStore.mockTStore1();
+		AgeOffStore<String> aoStore = new AgeOffStore<>(sstore, 10, tts);
 
-  }
+		aoStore.ageOff();
 
-  @Test
-  public void testBasic() {
+		long txid1 = aoStore.create();
+		aoStore.reserve(txid1);
+		aoStore.setStatus(txid1, TStatus.IN_PROGRESS);
+		aoStore.unreserve(txid1, 0);
 
-    TestTimeSource tts = new TestTimeSource();
-    SimpleStore<String> sstore = new SimpleStore<>();
-    AgeOffStore<String> aoStore = new AgeOffStore<>(sstore, 10, tts);
+		aoStore.ageOff();
 
-    aoStore.ageOff();
+		long txid2 = aoStore.create();
+		aoStore.reserve(txid2);
+		aoStore.setStatus(txid2, TStatus.IN_PROGRESS);
+		aoStore.setStatus(txid2, TStatus.FAILED);
+		aoStore.unreserve(txid2, 0);
 
-    long txid1 = aoStore.create();
-    aoStore.reserve(txid1);
-    aoStore.setStatus(txid1, TStatus.IN_PROGRESS);
-    aoStore.unreserve(txid1, 0);
+		ttsTime[0] = 6;
 
-    aoStore.ageOff();
+		long txid3 = aoStore.create();
+		aoStore.reserve(txid3);
+		aoStore.setStatus(txid3, TStatus.IN_PROGRESS);
+		aoStore.setStatus(txid3, TStatus.SUCCESSFUL);
+		aoStore.unreserve(txid3, 0);
 
-    long txid2 = aoStore.create();
-    aoStore.reserve(txid2);
-    aoStore.setStatus(txid2, TStatus.IN_PROGRESS);
-    aoStore.setStatus(txid2, TStatus.FAILED);
-    aoStore.unreserve(txid2, 0);
+		Long txid4 = aoStore.create();
 
-    tts.time = 6;
+		aoStore.ageOff();
 
-    long txid3 = aoStore.create();
-    aoStore.reserve(txid3);
-    aoStore.setStatus(txid3, TStatus.IN_PROGRESS);
-    aoStore.setStatus(txid3, TStatus.SUCCESSFUL);
-    aoStore.unreserve(txid3, 0);
+		assertEquals(new HashSet<>(Arrays.asList(txid1, txid2, txid3, txid4)), new HashSet<>(aoStore.list()));
+		assertEquals(4, new HashSet<>(aoStore.list()).size());
 
-    Long txid4 = aoStore.create();
+		ttsTime[0] = 15;
 
-    aoStore.ageOff();
+		aoStore.ageOff();
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1, txid2, txid3, txid4)),
-        new HashSet<>(aoStore.list()));
-    assertEquals(4, new HashSet<>(aoStore.list()).size());
+		assertEquals(new HashSet<>(Arrays.asList(txid1, txid3, txid4)), new HashSet<>(aoStore.list()));
+		assertEquals(3, new HashSet<>(aoStore.list()).size());
 
-    tts.time = 15;
+		ttsTime[0] = 30;
 
-    aoStore.ageOff();
+		aoStore.ageOff();
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1, txid3, txid4)), new HashSet<>(aoStore.list()));
-    assertEquals(3, new HashSet<>(aoStore.list()).size());
+		assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
+		assertEquals(1, new HashSet<>(aoStore.list()).size());
+	}
 
-    tts.time = 30;
+	@Test
+	public void testNonEmpty() {
+		// test age off when source store starts off non empty
 
-    aoStore.ageOff();
+		TimeSource tts = Mockito.spy(TimeSource.class);
+		long[] ttsTime = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return ttsTime[0];
+			}).when(tts).currentTimeMillis();
+		} catch (Exception exception) {
+		}
+		TStore<String> sstore = SimpleStore.mockTStore1();
+		long txid1 = sstore.create();
+		sstore.reserve(txid1);
+		sstore.setStatus(txid1, TStatus.IN_PROGRESS);
+		sstore.unreserve(txid1, 0);
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
-    assertEquals(1, new HashSet<>(aoStore.list()).size());
-  }
+		long txid2 = sstore.create();
+		sstore.reserve(txid2);
+		sstore.setStatus(txid2, TStatus.IN_PROGRESS);
+		sstore.setStatus(txid2, TStatus.FAILED);
+		sstore.unreserve(txid2, 0);
 
-  @Test
-  public void testNonEmpty() {
-    // test age off when source store starts off non empty
+		long txid3 = sstore.create();
+		sstore.reserve(txid3);
+		sstore.setStatus(txid3, TStatus.IN_PROGRESS);
+		sstore.setStatus(txid3, TStatus.SUCCESSFUL);
+		sstore.unreserve(txid3, 0);
 
-    TestTimeSource tts = new TestTimeSource();
-    SimpleStore<String> sstore = new SimpleStore<>();
-    long txid1 = sstore.create();
-    sstore.reserve(txid1);
-    sstore.setStatus(txid1, TStatus.IN_PROGRESS);
-    sstore.unreserve(txid1, 0);
+		Long txid4 = sstore.create();
 
-    long txid2 = sstore.create();
-    sstore.reserve(txid2);
-    sstore.setStatus(txid2, TStatus.IN_PROGRESS);
-    sstore.setStatus(txid2, TStatus.FAILED);
-    sstore.unreserve(txid2, 0);
+		AgeOffStore<String> aoStore = new AgeOffStore<>(sstore, 10, tts);
 
-    long txid3 = sstore.create();
-    sstore.reserve(txid3);
-    sstore.setStatus(txid3, TStatus.IN_PROGRESS);
-    sstore.setStatus(txid3, TStatus.SUCCESSFUL);
-    sstore.unreserve(txid3, 0);
+		assertEquals(new HashSet<>(Arrays.asList(txid1, txid2, txid3, txid4)), new HashSet<>(aoStore.list()));
+		assertEquals(4, new HashSet<>(aoStore.list()).size());
 
-    Long txid4 = sstore.create();
+		aoStore.ageOff();
 
-    AgeOffStore<String> aoStore = new AgeOffStore<>(sstore, 10, tts);
+		assertEquals(new HashSet<>(Arrays.asList(txid1, txid2, txid3, txid4)), new HashSet<>(aoStore.list()));
+		assertEquals(4, new HashSet<>(aoStore.list()).size());
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1, txid2, txid3, txid4)),
-        new HashSet<>(aoStore.list()));
-    assertEquals(4, new HashSet<>(aoStore.list()).size());
+		ttsTime[0] = 15;
 
-    aoStore.ageOff();
+		aoStore.ageOff();
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1, txid2, txid3, txid4)),
-        new HashSet<>(aoStore.list()));
-    assertEquals(4, new HashSet<>(aoStore.list()).size());
+		assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
+		assertEquals(1, new HashSet<>(aoStore.list()).size());
 
-    tts.time = 15;
+		aoStore.reserve(txid1);
+		aoStore.setStatus(txid1, TStatus.FAILED_IN_PROGRESS);
+		aoStore.unreserve(txid1, 0);
 
-    aoStore.ageOff();
+		ttsTime[0] = 30;
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
-    assertEquals(1, new HashSet<>(aoStore.list()).size());
+		aoStore.ageOff();
 
-    aoStore.reserve(txid1);
-    aoStore.setStatus(txid1, TStatus.FAILED_IN_PROGRESS);
-    aoStore.unreserve(txid1, 0);
+		assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
+		assertEquals(1, new HashSet<>(aoStore.list()).size());
 
-    tts.time = 30;
+		aoStore.reserve(txid1);
+		aoStore.setStatus(txid1, TStatus.FAILED);
+		aoStore.unreserve(txid1, 0);
 
-    aoStore.ageOff();
+		aoStore.ageOff();
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
-    assertEquals(1, new HashSet<>(aoStore.list()).size());
+		assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
+		assertEquals(1, new HashSet<>(aoStore.list()).size());
 
-    aoStore.reserve(txid1);
-    aoStore.setStatus(txid1, TStatus.FAILED);
-    aoStore.unreserve(txid1, 0);
+		ttsTime[0] = 42;
 
-    aoStore.ageOff();
+		aoStore.ageOff();
 
-    assertEquals(new HashSet<>(Arrays.asList(txid1)), new HashSet<>(aoStore.list()));
-    assertEquals(1, new HashSet<>(aoStore.list()).size());
-
-    tts.time = 42;
-
-    aoStore.ageOff();
-
-    assertEquals(0, new HashSet<>(aoStore.list()).size());
-  }
+		assertEquals(0, new HashSet<>(aoStore.list()).size());
+	}
 }

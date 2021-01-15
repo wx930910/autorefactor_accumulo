@@ -52,279 +52,274 @@ import org.apache.thrift.transport.TServerSocket;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 public class TServerUtilsTest {
 
-  protected static class TestServerConfigurationFactory extends ServerConfigurationFactory {
+	static public ServerConfigurationFactory mockServerConfigurationFactory1(ServerContext context) {
+		ConfigurationCopy[] mockFieldVariableConf = new ConfigurationCopy[] { null };
+		ServerConfigurationFactory mockInstance = Mockito
+				.spy(new ServerConfigurationFactory(context, new SiteConfiguration()));
+		mockFieldVariableConf[0] = new ConfigurationCopy(DefaultConfiguration.getInstance());
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return mockFieldVariableConf[0];
+			}).when(mockInstance).getSystemConfiguration();
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    private ConfigurationCopy conf = null;
+	private static class TServerWithoutES extends TServer {
+		boolean stopCalled;
 
-    public TestServerConfigurationFactory(ServerContext context) {
-      super(context, new SiteConfiguration());
-      conf = new ConfigurationCopy(DefaultConfiguration.getInstance());
-    }
+		TServerWithoutES(TServerSocket socket) {
+			super(new TServer.Args(socket));
+			stopCalled = false;
+		}
 
-    @Override
-    public synchronized AccumuloConfiguration getSystemConfiguration() {
-      return conf;
-    }
+		@Override
+		public void serve() {
+		}
 
-  }
+		@Override
+		public void stop() {
+			stopCalled = true;
+		}
+	}
 
-  private static class TServerWithoutES extends TServer {
-    boolean stopCalled;
+	private static class TServerWithES extends TServerWithoutES {
+		final ExecutorService executorService_;
 
-    TServerWithoutES(TServerSocket socket) {
-      super(new TServer.Args(socket));
-      stopCalled = false;
-    }
+		TServerWithES(TServerSocket socket) {
+			super(socket);
+			executorService_ = createMock(ExecutorService.class);
+			expect(executorService_.shutdownNow()).andReturn(null);
+			replay(executorService_);
+		}
+	}
 
-    @Override
-    public void serve() {}
+	@Test
+	public void testStopTServer_ES() {
+		TServerSocket socket = createNiceMock(TServerSocket.class);
+		TServerWithES s = new TServerWithES(socket);
+		TServerUtils.stopTServer(s);
+		assertTrue(s.stopCalled);
+		verify(s.executorService_);
+	}
 
-    @Override
-    public void stop() {
-      stopCalled = true;
-    }
-  }
+	@Test
+	public void testStopTServer_NoES() {
+		TServerSocket socket = createNiceMock(TServerSocket.class);
+		TServerWithoutES s = new TServerWithoutES(socket);
+		TServerUtils.stopTServer(s);
+		assertTrue(s.stopCalled);
+	}
 
-  private static class TServerWithES extends TServerWithoutES {
-    final ExecutorService executorService_;
+	@Test
+	public void testStopTServer_Null() {
+		TServerUtils.stopTServer(null);
+		// not dying is enough
+	}
 
-    TServerWithES(TServerSocket socket) {
-      super(socket);
-      executorService_ = createMock(ExecutorService.class);
-      expect(executorService_.shutdownNow()).andReturn(null);
-      replay(executorService_);
-    }
-  }
+	private static AccumuloConfiguration config = new ConfigurationCopy(DefaultConfiguration.getInstance());
 
-  @Test
-  public void testStopTServer_ES() {
-    TServerSocket socket = createNiceMock(TServerSocket.class);
-    TServerWithES s = new TServerWithES(socket);
-    TServerUtils.stopTServer(s);
-    assertTrue(s.stopCalled);
-    verify(s.executorService_);
-  }
+	private static ServerContext createMockContext() {
+		ServerContext context = EasyMock.createMock(ServerContext.class);
+		expect(context.getZooReaderWriter()).andReturn(null);
+		expect(context.getProperties()).andReturn(new Properties()).anyTimes();
+		expect(context.getZooKeepers()).andReturn("").anyTimes();
+		expect(context.getInstanceName()).andReturn("instance").anyTimes();
+		expect(context.getZooKeepersSessionTimeOut()).andReturn(1).anyTimes();
+		expect(context.getInstanceID()).andReturn("11111").anyTimes();
+		expect(context.getConfiguration()).andReturn(config).anyTimes();
+		return context;
+	}
 
-  @Test
-  public void testStopTServer_NoES() {
-    TServerSocket socket = createNiceMock(TServerSocket.class);
-    TServerWithoutES s = new TServerWithoutES(socket);
-    TServerUtils.stopTServer(s);
-    assertTrue(s.stopCalled);
-  }
+	private static ServerContext createReplayMockInfo() {
+		ServerContext context = createMockContext();
+		replay(context);
+		return context;
+	}
 
-  @Test
-  public void testStopTServer_Null() {
-    TServerUtils.stopTServer(null);
-    // not dying is enough
-  }
+	private static final ServerConfigurationFactory factory = TServerUtilsTest
+			.mockServerConfigurationFactory1(createReplayMockInfo());
 
-  private static AccumuloConfiguration config =
-      new ConfigurationCopy(DefaultConfiguration.getInstance());
+	@After
+	public void resetProperty() {
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
+				Property.TSERV_CLIENTPORT.getDefaultValue());
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_PORTSEARCH,
+				Property.TSERV_PORTSEARCH.getDefaultValue());
+	}
 
-  private static ServerContext createMockContext() {
-    ServerContext context = EasyMock.createMock(ServerContext.class);
-    expect(context.getZooReaderWriter()).andReturn(null);
-    expect(context.getProperties()).andReturn(new Properties()).anyTimes();
-    expect(context.getZooKeepers()).andReturn("").anyTimes();
-    expect(context.getInstanceName()).andReturn("instance").anyTimes();
-    expect(context.getZooKeepersSessionTimeOut()).andReturn(1).anyTimes();
-    expect(context.getInstanceID()).andReturn("11111").anyTimes();
-    expect(context.getConfiguration()).andReturn(config).anyTimes();
-    return context;
-  }
+	@Test
+	public void testStartServerZeroPort() throws Exception {
+		TServer server = null;
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT, "0");
+		try {
+			ServerAddress address = startServer();
+			assertNotNull(address);
+			server = address.getServer();
+			assertNotNull(server);
+			assertTrue(address.getAddress().getPort() > 1024);
+		} finally {
+			if (null != server) {
+				TServerUtils.stopTServer(server);
+			}
+		}
+	}
 
-  private static ServerContext createReplayMockInfo() {
-    ServerContext context = createMockContext();
-    replay(context);
-    return context;
-  }
+	@Test
+	public void testStartServerFreePort() throws Exception {
+		TServer server = null;
+		int port = getFreePort(1024);
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT, Integer.toString(port));
+		try {
+			ServerAddress address = startServer();
+			assertNotNull(address);
+			server = address.getServer();
+			assertNotNull(server);
+			assertEquals(port, address.getAddress().getPort());
+		} finally {
+			if (null != server) {
+				TServerUtils.stopTServer(server);
+			}
+		}
+	}
 
-  private static final TestServerConfigurationFactory factory =
-      new TestServerConfigurationFactory(createReplayMockInfo());
+	@SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
+	@Test(expected = UnknownHostException.class)
+	public void testStartServerUsedPort() throws Exception {
+		int port = getFreePort(1024);
+		InetAddress addr = InetAddress.getByName("localhost");
+		// Bind to the port
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT, Integer.toString(port));
+		try (ServerSocket s = new ServerSocket(port, 50, addr)) {
+			assertNotNull(s);
+			startServer();
+		}
+	}
 
-  @After
-  public void resetProperty() {
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
-        Property.TSERV_CLIENTPORT.getDefaultValue());
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_PORTSEARCH,
-        Property.TSERV_PORTSEARCH.getDefaultValue());
-  }
+	@SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
+	@Test
+	public void testStartServerUsedPortWithSearch() throws Exception {
+		TServer server = null;
+		int[] port = findTwoFreeSequentialPorts(1024);
+		// Bind to the port
+		InetAddress addr = InetAddress.getByName("localhost");
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
+				Integer.toString(port[0]));
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_PORTSEARCH, "true");
+		try (ServerSocket s = new ServerSocket(port[0], 50, addr)) {
+			assertNotNull(s);
+			ServerAddress address = startServer();
+			assertNotNull(address);
+			server = address.getServer();
+			assertNotNull(server);
+			assertEquals(port[1], address.getAddress().getPort());
+		} finally {
+			if (null != server) {
+				TServerUtils.stopTServer(server);
+			}
 
-  @Test
-  public void testStartServerZeroPort() throws Exception {
-    TServer server = null;
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT, "0");
-    try {
-      ServerAddress address = startServer();
-      assertNotNull(address);
-      server = address.getServer();
-      assertNotNull(server);
-      assertTrue(address.getAddress().getPort() > 1024);
-    } finally {
-      if (null != server) {
-        TServerUtils.stopTServer(server);
-      }
-    }
-  }
+		}
+	}
 
-  @Test
-  public void testStartServerFreePort() throws Exception {
-    TServer server = null;
-    int port = getFreePort(1024);
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
-        Integer.toString(port));
-    try {
-      ServerAddress address = startServer();
-      assertNotNull(address);
-      server = address.getServer();
-      assertNotNull(server);
-      assertEquals(port, address.getAddress().getPort());
-    } finally {
-      if (null != server) {
-        TServerUtils.stopTServer(server);
-      }
-    }
-  }
+	@Test
+	public void testStartServerPortRange() throws Exception {
+		TServer server = null;
+		int[] port = findTwoFreeSequentialPorts(1024);
+		String portRange = Integer.toString(port[0]) + "-" + Integer.toString(port[1]);
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT, portRange);
+		try {
+			ServerAddress address = startServer();
+			assertNotNull(address);
+			server = address.getServer();
+			assertNotNull(server);
+			assertTrue(port[0] == address.getAddress().getPort() || port[1] == address.getAddress().getPort());
+		} finally {
+			if (null != server) {
+				TServerUtils.stopTServer(server);
+			}
+		}
+	}
 
-  @SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
-  @Test(expected = UnknownHostException.class)
-  public void testStartServerUsedPort() throws Exception {
-    int port = getFreePort(1024);
-    InetAddress addr = InetAddress.getByName("localhost");
-    // Bind to the port
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
-        Integer.toString(port));
-    try (ServerSocket s = new ServerSocket(port, 50, addr)) {
-      assertNotNull(s);
-      startServer();
-    }
-  }
+	@SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
+	@Test
+	public void testStartServerPortRangeFirstPortUsed() throws Exception {
+		TServer server = null;
+		InetAddress addr = InetAddress.getByName("localhost");
+		int[] port = findTwoFreeSequentialPorts(1024);
+		String portRange = Integer.toString(port[0]) + "-" + Integer.toString(port[1]);
+		// Bind to the port
+		((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT, portRange);
+		try (ServerSocket s = new ServerSocket(port[0], 50, addr)) {
+			assertNotNull(s);
+			ServerAddress address = startServer();
+			assertNotNull(address);
+			server = address.getServer();
+			assertNotNull(server);
+			assertEquals(port[1], address.getAddress().getPort());
+		} finally {
+			if (null != server) {
+				TServerUtils.stopTServer(server);
+			}
+		}
+	}
 
-  @SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
-  @Test
-  public void testStartServerUsedPortWithSearch() throws Exception {
-    TServer server = null;
-    int[] port = findTwoFreeSequentialPorts(1024);
-    // Bind to the port
-    InetAddress addr = InetAddress.getByName("localhost");
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
-        Integer.toString(port[0]));
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_PORTSEARCH, "true");
-    try (ServerSocket s = new ServerSocket(port[0], 50, addr)) {
-      assertNotNull(s);
-      ServerAddress address = startServer();
-      assertNotNull(address);
-      server = address.getServer();
-      assertNotNull(server);
-      assertEquals(port[1], address.getAddress().getPort());
-    } finally {
-      if (null != server) {
-        TServerUtils.stopTServer(server);
-      }
+	private int[] findTwoFreeSequentialPorts(int startingAddress) throws UnknownHostException {
+		boolean sequential = false;
+		int low = startingAddress;
+		int high = 0;
+		do {
+			low = getFreePort(low);
+			high = getFreePort(low + 1);
+			sequential = ((high - low) == 1);
+		} while (!sequential);
+		return new int[] { low, high };
+	}
 
-    }
-  }
+	@SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
+	private int getFreePort(int startingAddress) throws UnknownHostException {
+		final InetAddress addr = InetAddress.getByName("localhost");
+		for (int i = startingAddress; i < 65535; i++) {
+			try {
+				ServerSocket s = new ServerSocket(i, 50, addr);
+				int port = s.getLocalPort();
+				s.close();
+				return port;
+			} catch (IOException e) {
+				// keep trying
+			}
+		}
+		throw new RuntimeException("Unable to find open port");
+	}
 
-  @Test
-  public void testStartServerPortRange() throws Exception {
-    TServer server = null;
-    int[] port = findTwoFreeSequentialPorts(1024);
-    String portRange = Integer.toString(port[0]) + "-" + Integer.toString(port[1]);
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
-        portRange);
-    try {
-      ServerAddress address = startServer();
-      assertNotNull(address);
-      server = address.getServer();
-      assertNotNull(server);
-      assertTrue(
-          port[0] == address.getAddress().getPort() || port[1] == address.getAddress().getPort());
-    } finally {
-      if (null != server) {
-        TServerUtils.stopTServer(server);
-      }
-    }
-  }
+	private ServerAddress startServer() throws Exception {
+		ServerContext ctx = createMock(ServerContext.class);
+		expect(ctx.getZooReaderWriter()).andReturn(null).anyTimes();
+		expect(ctx.getInstanceID()).andReturn("instance").anyTimes();
+		expect(ctx.getConfiguration()).andReturn(factory.getSystemConfiguration()).anyTimes();
+		expect(ctx.getThriftServerType()).andReturn(ThriftServerType.THREADPOOL);
+		expect(ctx.getServerSslParams()).andReturn(null).anyTimes();
+		expect(ctx.getSaslParams()).andReturn(null).anyTimes();
+		expect(ctx.getClientTimeoutInMillis()).andReturn((long) 1000).anyTimes();
+		replay(ctx);
+		ClientServiceHandler clientHandler = new ClientServiceHandler(ctx, null, null);
+		Iface rpcProxy = TraceUtil.wrapService(clientHandler);
+		Processor<Iface> processor = new Processor<>(rpcProxy);
+		// "localhost" explicitly to make sure we can always bind to that interface
+		// (avoids DNS
+		// misconfiguration)
+		String hostname = "localhost";
 
-  @SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
-  @Test
-  public void testStartServerPortRangeFirstPortUsed() throws Exception {
-    TServer server = null;
-    InetAddress addr = InetAddress.getByName("localhost");
-    int[] port = findTwoFreeSequentialPorts(1024);
-    String portRange = Integer.toString(port[0]) + "-" + Integer.toString(port[1]);
-    // Bind to the port
-    ((ConfigurationCopy) factory.getSystemConfiguration()).set(Property.TSERV_CLIENTPORT,
-        portRange);
-    try (ServerSocket s = new ServerSocket(port[0], 50, addr)) {
-      assertNotNull(s);
-      ServerAddress address = startServer();
-      assertNotNull(address);
-      server = address.getServer();
-      assertNotNull(server);
-      assertEquals(port[1], address.getAddress().getPort());
-    } finally {
-      if (null != server) {
-        TServerUtils.stopTServer(server);
-      }
-    }
-  }
+		return TServerUtils.startServer(Metrics.initSystem(getClass().getSimpleName()), ctx, hostname,
+				Property.TSERV_CLIENTPORT, processor, "TServerUtilsTest", "TServerUtilsTestThread",
+				Property.TSERV_PORTSEARCH, Property.TSERV_MINTHREADS, Property.TSERV_THREADCHECK,
+				Property.GENERAL_MAX_MESSAGE_SIZE);
 
-  private int[] findTwoFreeSequentialPorts(int startingAddress) throws UnknownHostException {
-    boolean sequential = false;
-    int low = startingAddress;
-    int high = 0;
-    do {
-      low = getFreePort(low);
-      high = getFreePort(low + 1);
-      sequential = ((high - low) == 1);
-    } while (!sequential);
-    return new int[] {low, high};
-  }
-
-  @SuppressFBWarnings(value = "UNENCRYPTED_SERVER_SOCKET", justification = "socket for testing")
-  private int getFreePort(int startingAddress) throws UnknownHostException {
-    final InetAddress addr = InetAddress.getByName("localhost");
-    for (int i = startingAddress; i < 65535; i++) {
-      try {
-        ServerSocket s = new ServerSocket(i, 50, addr);
-        int port = s.getLocalPort();
-        s.close();
-        return port;
-      } catch (IOException e) {
-        // keep trying
-      }
-    }
-    throw new RuntimeException("Unable to find open port");
-  }
-
-  private ServerAddress startServer() throws Exception {
-    ServerContext ctx = createMock(ServerContext.class);
-    expect(ctx.getZooReaderWriter()).andReturn(null).anyTimes();
-    expect(ctx.getInstanceID()).andReturn("instance").anyTimes();
-    expect(ctx.getConfiguration()).andReturn(factory.getSystemConfiguration()).anyTimes();
-    expect(ctx.getThriftServerType()).andReturn(ThriftServerType.THREADPOOL);
-    expect(ctx.getServerSslParams()).andReturn(null).anyTimes();
-    expect(ctx.getSaslParams()).andReturn(null).anyTimes();
-    expect(ctx.getClientTimeoutInMillis()).andReturn((long) 1000).anyTimes();
-    replay(ctx);
-    ClientServiceHandler clientHandler = new ClientServiceHandler(ctx, null, null);
-    Iface rpcProxy = TraceUtil.wrapService(clientHandler);
-    Processor<Iface> processor = new Processor<>(rpcProxy);
-    // "localhost" explicitly to make sure we can always bind to that interface (avoids DNS
-    // misconfiguration)
-    String hostname = "localhost";
-
-    return TServerUtils.startServer(Metrics.initSystem(getClass().getSimpleName()), ctx, hostname,
-        Property.TSERV_CLIENTPORT, processor, "TServerUtilsTest", "TServerUtilsTestThread",
-        Property.TSERV_PORTSEARCH, Property.TSERV_MINTHREADS, Property.TSERV_THREADCHECK,
-        Property.GENERAL_MAX_MESSAGE_SIZE);
-
-  }
+	}
 }

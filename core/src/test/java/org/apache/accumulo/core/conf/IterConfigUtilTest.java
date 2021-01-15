@@ -133,7 +133,8 @@ public class IterConfigUtilTest {
 	private SortedKeyValueIterator<Key, Value> createIter(IteratorScope scope, SortedMapIterator source,
 			AccumuloConfiguration conf) throws IOException {
 		IterLoad iterLoad = IterConfigUtil.loadIterConf(scope, EMPTY_ITERS, new HashMap<>(), conf);
-		iterLoad = iterLoad.iterEnv(new DefaultIteratorEnvironment(conf)).useAccumuloClassLoader(true);
+		iterLoad = iterLoad.iterEnv(DefaultIteratorEnvironment.mockIteratorEnvironment2(conf))
+				.useAccumuloClassLoader(true);
 		return IterConfigUtil.loadIterators(source, iterLoad);
 	}
 

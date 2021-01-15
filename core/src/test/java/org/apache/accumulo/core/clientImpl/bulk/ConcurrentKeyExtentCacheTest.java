@@ -27,7 +27,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
@@ -37,98 +36,162 @@ import org.apache.accumulo.core.dataImpl.KeyExtent;
 import org.apache.hadoop.io.Text;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.google.common.util.concurrent.Uninterruptibles;
 
 public class ConcurrentKeyExtentCacheTest {
 
-  private static List<KeyExtent> extents = new ArrayList<>();
-  private static Set<KeyExtent> extentsSet = new HashSet<>();
+	static public ConcurrentKeyExtentCache mockConcurrentKeyExtentCache1() {
+		ConcurrentSkipListSet<KeyExtent> mockFieldVariableSeen = new ConcurrentSkipListSet<>();
+		ConcurrentKeyExtentCache mockInstance = Mockito.spy(new ConcurrentKeyExtentCache(null, null));
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				Text row = stubInvo.getArgument(0);
+				int index = -1;
+				for (int i = 0; i < extents.size(); i++) {
+					if (extents.get(i).contains(row)) {
+						index = i;
+						break;
+					}
+				}
+				Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
+				return extents.subList(index, extents.size()).stream().limit(73);
+			}).when(mockInstance).lookupExtents(Mockito.any(Text.class));
+			Mockito.doAnswer((stubInvo) -> {
+				KeyExtent e = stubInvo.getArgument(0);
+				stubInvo.callRealMethod();
+				assertTrue(mockFieldVariableSeen.add(e));
+				return null;
+			}).when(mockInstance).updateCache(Mockito.any(KeyExtent.class));
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-  @BeforeClass
-  public static void setupSplits() {
-    Text prev = null;
-    for (int i = 1; i < 255; i++) {
-      Text endRow = new Text(String.format("%02x", i));
-      extents.add(new KeyExtent(TableId.of("1"), endRow, prev));
-      prev = endRow;
-    }
+	private static List<KeyExtent> extents = new ArrayList<>();
+	private static Set<KeyExtent> extentsSet = new HashSet<>();
 
-    extents.add(new KeyExtent(TableId.of("1"), null, prev));
+	@BeforeClass
+	public static void setupSplits() {
+		Text prev = null;
+		for (int i = 1; i < 255; i++) {
+			Text endRow = new Text(String.format("%02x", i));
+			extents.add(new KeyExtent(TableId.of("1"), endRow, prev));
+			prev = endRow;
+		}
 
-    extentsSet.addAll(extents);
-  }
+		extents.add(new KeyExtent(TableId.of("1"), null, prev));
 
-  private static class TestCache extends ConcurrentKeyExtentCache {
+		extentsSet.addAll(extents);
+	}
 
-    ConcurrentSkipListSet<KeyExtent> seen = new ConcurrentSkipListSet<>();
+	private void testLookup(ConcurrentKeyExtentCache tc, Text lookupRow) {
+		try {
+			KeyExtent extent = tc.lookup(lookupRow);
+			assertTrue(extent.contains(lookupRow));
+			assertTrue(extentsSet.contains(extent));
+		} catch (AccumuloException | AccumuloSecurityException | TableNotFoundException e) {
+			throw new RuntimeException(e);
+		}
+	}
 
-    TestCache() {
-      super(null, null);
-    }
+	@Test
+	public void testExactEndRows() {
+		Random rand = new SecureRandom();
 
-    @Override
-    protected void updateCache(KeyExtent e) {
-      super.updateCache(e);
-      assertTrue(seen.add(e));
-    }
+		ConcurrentKeyExtentCache tc = Mockito.spy(new ConcurrentKeyExtentCache(null, null));
+		ConcurrentSkipListSet<KeyExtent> tcSeen = new ConcurrentSkipListSet<>();
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				Text row = stubInvo.getArgument(0);
+				int index = -1;
+				for (int i = 0; i < extents.size(); i++) {
+					if (extents.get(i).contains(row)) {
+						index = i;
+						break;
+					}
+				}
+				Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
+				return extents.subList(index, extents.size()).stream().limit(73);
+			}).when(tc).lookupExtents(Mockito.any(Text.class));
+			Mockito.doAnswer((stubInvo) -> {
+				KeyExtent e = stubInvo.getArgument(0);
+				stubInvo.callRealMethod();
+				assertTrue(tcSeen.add(e));
+				return null;
+			}).when(tc).updateCache(Mockito.any(KeyExtent.class));
+		} catch (Exception exception) {
+		}
 
-    @Override
-    protected Stream<KeyExtent> lookupExtents(Text row) {
-      int index = -1;
-      for (int i = 0; i < extents.size(); i++) {
-        if (extents.get(i).contains(row)) {
-          index = i;
-          break;
-        }
-      }
+		rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).sequential()
+				.forEach(lookupRow -> testLookup(tc, lookupRow));
+		assertEquals(extentsSet, tcSeen);
 
-      Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
+		// try parallel
+		ConcurrentKeyExtentCache tc2 = ConcurrentKeyExtentCacheTest.mockConcurrentKeyExtentCache1();
+		rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).parallel()
+				.forEach(lookupRow -> testLookup(tc2, lookupRow));
+		assertEquals(extentsSet, tcSeen);
+	}
 
-      return extents.subList(index, extents.size()).stream().limit(73);
-    }
-  }
+	@Test
+	public void testRandom() {
+		ConcurrentKeyExtentCache tc = Mockito.spy(new ConcurrentKeyExtentCache(null, null));
+		ConcurrentSkipListSet<KeyExtent> tcSeen = new ConcurrentSkipListSet<>();
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				Text row = stubInvo.getArgument(0);
+				int index = -1;
+				for (int i = 0; i < extents.size(); i++) {
+					if (extents.get(i).contains(row)) {
+						index = i;
+						break;
+					}
+				}
+				Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
+				return extents.subList(index, extents.size()).stream().limit(73);
+			}).when(tc).lookupExtents(Mockito.any(Text.class));
+			Mockito.doAnswer((stubInvo) -> {
+				KeyExtent e = stubInvo.getArgument(0);
+				stubInvo.callRealMethod();
+				assertTrue(tcSeen.add(e));
+				return null;
+			}).when(tc).updateCache(Mockito.any(KeyExtent.class));
+		} catch (Exception exception) {
+		}
 
-  private void testLookup(TestCache tc, Text lookupRow) {
-    try {
-      KeyExtent extent = tc.lookup(lookupRow);
-      assertTrue(extent.contains(lookupRow));
-      assertTrue(extentsSet.contains(extent));
-    } catch (AccumuloException | AccumuloSecurityException | TableNotFoundException e) {
-      throw new RuntimeException(e);
-    }
-  }
+		Random rand = new SecureRandom();
+		rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).sequential()
+				.forEach(lookupRow -> testLookup(tc, lookupRow));
+		assertEquals(extentsSet, tcSeen);
 
-  @Test
-  public void testExactEndRows() {
-    Random rand = new SecureRandom();
-
-    TestCache tc = new TestCache();
-
-    rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).sequential()
-        .forEach(lookupRow -> testLookup(tc, lookupRow));
-    assertEquals(extentsSet, tc.seen);
-
-    // try parallel
-    TestCache tc2 = new TestCache();
-    rand.ints(20000, 0, 256).mapToObj(i -> new Text(String.format("%02x", i))).parallel()
-        .forEach(lookupRow -> testLookup(tc2, lookupRow));
-    assertEquals(extentsSet, tc.seen);
-  }
-
-  @Test
-  public void testRandom() {
-    TestCache tc = new TestCache();
-
-    Random rand = new SecureRandom();
-    rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).sequential()
-        .forEach(lookupRow -> testLookup(tc, lookupRow));
-    assertEquals(extentsSet, tc.seen);
-
-    // try parallel
-    TestCache tc2 = new TestCache();
-    rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).parallel()
-        .forEach(lookupRow -> testLookup(tc2, lookupRow));
-    assertEquals(extentsSet, tc2.seen);
-  }
+		// try parallel
+		ConcurrentKeyExtentCache tc2 = Mockito.spy(new ConcurrentKeyExtentCache(null, null));
+		ConcurrentSkipListSet<KeyExtent> tc2Seen = new ConcurrentSkipListSet<>();
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				Text row = stubInvo.getArgument(0);
+				int index = -1;
+				for (int i = 0; i < extents.size(); i++) {
+					if (extents.get(i).contains(row)) {
+						index = i;
+						break;
+					}
+				}
+				Uninterruptibles.sleepUninterruptibly(3, TimeUnit.MILLISECONDS);
+				return extents.subList(index, extents.size()).stream().limit(73);
+			}).when(tc2).lookupExtents(Mockito.any(Text.class));
+			Mockito.doAnswer((stubInvo) -> {
+				KeyExtent e = stubInvo.getArgument(0);
+				stubInvo.callRealMethod();
+				assertTrue(tc2Seen.add(e));
+				return null;
+			}).when(tc2).updateCache(Mockito.any(KeyExtent.class));
+		} catch (Exception exception) {
+		}
+		rand.ints(20000).mapToObj(i -> new Text(String.format("%08x", i))).parallel()
+				.forEach(lookupRow -> testLookup(tc2, lookupRow));
+		assertEquals(extentsSet, tc2Seen);
+	}
 }

@@ -21,26 +21,26 @@ import java.util.TreeSet;
 
 import org.apache.accumulo.shell.Shell;
 import org.apache.accumulo.shell.Shell.Command;
-import org.apache.commons.cli.CommandLine;
+import org.mockito.Mockito;
 
-public class DebugCommand extends Command {
+public class DebugCommand {
 
-  @Override
-  public int execute(String fullCommand, CommandLine cl, Shell shellState) throws Exception {
-    Set<String> lines = new TreeSet<>();
-    lines.add("This is a test");
-    shellState.printLines(lines.iterator(), true);
-    return 0;
-  }
-
-  @Override
-  public String description() {
-    return "prints a message to test extension feature";
-  }
-
-  @Override
-  public int numArgs() {
-    return 0;
-  }
+	static public Command mockCommand1() {
+		Command mockInstance = Mockito.spy(Command.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return "prints a message to test extension feature";
+			}).when(mockInstance).description();
+			Mockito.doAnswer((stubInvo) -> {
+				Shell shellState = stubInvo.getArgument(2);
+				Set<String> lines = new TreeSet<>();
+				lines.add("This is a test");
+				shellState.printLines(lines.iterator(), true);
+				return 0;
+			}).when(mockInstance).execute(Mockito.any(), Mockito.any(), Mockito.any());
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
 }

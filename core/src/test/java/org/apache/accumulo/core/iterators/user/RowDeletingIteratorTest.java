@@ -35,195 +35,195 @@ import org.apache.accumulo.core.iterators.SortedMapIterator;
 import org.apache.accumulo.core.iterators.system.ColumnFamilySkippingIterator;
 import org.apache.hadoop.io.Text;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class RowDeletingIteratorTest {
 
-  public static class TestIE implements IteratorEnvironment {
+	static public IteratorEnvironment mockIteratorEnvironment1(IteratorScope scope, boolean fmc) {
+		IteratorScope[] mockFieldVariableScope = new IteratorScope[1];
+		boolean[] mockFieldVariableFmc = new boolean[1];
+		IteratorEnvironment mockInstance = Mockito.spy(IteratorEnvironment.class);
+		mockFieldVariableScope[0] = scope;
+		mockFieldVariableFmc[0] = fmc;
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return mockFieldVariableFmc[0];
+			}).when(mockInstance).isFullMajorCompaction();
+			Mockito.doAnswer((stubInvo) -> {
+				return mockFieldVariableScope[0];
+			}).when(mockInstance).getIteratorScope();
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    private IteratorScope scope;
-    private boolean fmc;
+	Key newKey(String row, String cf, String cq, long time) {
+		return new Key(new Text(row), new Text(cf), new Text(cq), time);
+	}
 
-    public TestIE(IteratorScope scope, boolean fmc) {
-      this.scope = scope;
-      this.fmc = fmc;
-    }
+	void put(TreeMap<Key, Value> tm, String row, String cf, String cq, long time, Value val) {
+		tm.put(newKey(row, cf, cq, time), val);
+	}
 
-    @Override
-    public IteratorScope getIteratorScope() {
-      return scope;
-    }
+	void put(TreeMap<Key, Value> tm, String row, String cf, String cq, long time, String val) {
+		put(tm, row, cf, cq, time, new Value(val.getBytes()));
+	}
 
-    @Override
-    public boolean isFullMajorCompaction() {
-      return fmc;
-    }
-  }
+	private void testAssertions(RowDeletingIterator rdi, String row, String cf, String cq, long time, String val) {
+		assertTrue(rdi.hasTop());
+		assertEquals(newKey(row, cf, cq, time), rdi.getTopKey());
+		assertEquals(val, rdi.getTopValue().toString());
+	}
 
-  Key newKey(String row, String cf, String cq, long time) {
-    return new Key(new Text(row), new Text(cf), new Text(cq), time);
-  }
+	@Test
+	public void test1() throws Exception {
 
-  void put(TreeMap<Key,Value> tm, String row, String cf, String cq, long time, Value val) {
-    tm.put(newKey(row, cf, cq, time), val);
-  }
+		TreeMap<Key, Value> tm1 = new TreeMap<>();
+		put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
+		put(tm1, "r1", "cf1", "cq1", 5, "v1");
+		put(tm1, "r1", "cf1", "cq3", 5, "v1");
+		put(tm1, "r2", "cf1", "cq1", 5, "v1");
 
-  void put(TreeMap<Key,Value> tm, String row, String cf, String cq, long time, String val) {
-    put(tm, row, cf, cq, time, new Value(val.getBytes()));
-  }
+		RowDeletingIterator rdi = new RowDeletingIterator();
+		rdi.init(new SortedMapIterator(tm1), null,
+				RowDeletingIteratorTest.mockIteratorEnvironment1(IteratorScope.scan, false));
 
-  private void testAssertions(RowDeletingIterator rdi, String row, String cf, String cq, long time,
-      String val) {
-    assertTrue(rdi.hasTop());
-    assertEquals(newKey(row, cf, cq, time), rdi.getTopKey());
-    assertEquals(val, rdi.getTopValue().toString());
-  }
+		rdi.seek(new Range(), new ArrayList<>(), false);
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-  @Test
-  public void test1() throws Exception {
+		for (int i = 0; i < 5; i++) {
+			rdi.seek(new Range(newKey("r1", "cf1", "cq" + i, 5), null), new ArrayList<>(), false);
+			testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+		}
 
-    TreeMap<Key,Value> tm1 = new TreeMap<>();
-    put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
-    put(tm1, "r1", "cf1", "cq1", 5, "v1");
-    put(tm1, "r1", "cf1", "cq3", 5, "v1");
-    put(tm1, "r2", "cf1", "cq1", 5, "v1");
+		rdi.seek(new Range(newKey("r11", "cf1", "cq1", 5), null), new ArrayList<>(), false);
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    RowDeletingIterator rdi = new RowDeletingIterator();
-    rdi.init(new SortedMapIterator(tm1), null, new TestIE(IteratorScope.scan, false));
+		put(tm1, "r2", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
+		rdi.seek(new Range(), new ArrayList<>(), false);
+		assertFalse(rdi.hasTop());
 
-    rdi.seek(new Range(), new ArrayList<>(), false);
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+		for (int i = 0; i < 5; i++) {
+			rdi.seek(new Range(newKey("r1", "cf1", "cq" + i, 5), null), new ArrayList<>(), false);
+			assertFalse(rdi.hasTop());
+		}
 
-    for (int i = 0; i < 5; i++) {
-      rdi.seek(new Range(newKey("r1", "cf1", "cq" + i, 5), null), new ArrayList<>(), false);
-      testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
-    }
+		put(tm1, "r0", "cf1", "cq1", 5, "v1");
+		rdi.seek(new Range(), new ArrayList<>(), false);
+		testAssertions(rdi, "r0", "cf1", "cq1", 5, "v1");
+		rdi.next();
+		assertFalse(rdi.hasTop());
 
-    rdi.seek(new Range(newKey("r11", "cf1", "cq1", 5), null), new ArrayList<>(), false);
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+	}
 
-    put(tm1, "r2", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
-    rdi.seek(new Range(), new ArrayList<>(), false);
-    assertFalse(rdi.hasTop());
+	@Test
+	public void test2() throws Exception {
 
-    for (int i = 0; i < 5; i++) {
-      rdi.seek(new Range(newKey("r1", "cf1", "cq" + i, 5), null), new ArrayList<>(), false);
-      assertFalse(rdi.hasTop());
-    }
+		TreeMap<Key, Value> tm1 = new TreeMap<>();
+		put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
+		put(tm1, "r1", "cf1", "cq1", 5, "v1");
+		put(tm1, "r1", "cf1", "cq3", 15, "v1");
+		put(tm1, "r1", "cf1", "cq4", 5, "v1");
+		put(tm1, "r1", "cf1", "cq5", 15, "v1");
+		put(tm1, "r2", "cf1", "cq1", 5, "v1");
 
-    put(tm1, "r0", "cf1", "cq1", 5, "v1");
-    rdi.seek(new Range(), new ArrayList<>(), false);
-    testAssertions(rdi, "r0", "cf1", "cq1", 5, "v1");
-    rdi.next();
-    assertFalse(rdi.hasTop());
+		RowDeletingIterator rdi = new RowDeletingIterator();
+		rdi.init(new SortedMapIterator(tm1), null,
+				RowDeletingIteratorTest.mockIteratorEnvironment1(IteratorScope.scan, false));
 
-  }
+		rdi.seek(new Range(), new ArrayList<>(), false);
+		testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-  @Test
-  public void test2() throws Exception {
+		rdi.seek(new Range(newKey("r1", "cf1", "cq1", 5), null), new ArrayList<>(), false);
+		testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    TreeMap<Key,Value> tm1 = new TreeMap<>();
-    put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
-    put(tm1, "r1", "cf1", "cq1", 5, "v1");
-    put(tm1, "r1", "cf1", "cq3", 15, "v1");
-    put(tm1, "r1", "cf1", "cq4", 5, "v1");
-    put(tm1, "r1", "cf1", "cq5", 15, "v1");
-    put(tm1, "r2", "cf1", "cq1", 5, "v1");
+		rdi.seek(new Range(newKey("r1", "cf1", "cq4", 5), null), new ArrayList<>(), false);
+		testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    RowDeletingIterator rdi = new RowDeletingIterator();
-    rdi.init(new SortedMapIterator(tm1), null, new TestIE(IteratorScope.scan, false));
+		rdi.seek(new Range(newKey("r1", "cf1", "cq5", 20), null), new ArrayList<>(), false);
+		testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    rdi.seek(new Range(), new ArrayList<>(), false);
-    testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+		rdi.seek(new Range(newKey("r1", "cf1", "cq9", 20), null), new ArrayList<>(), false);
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+	}
 
-    rdi.seek(new Range(newKey("r1", "cf1", "cq1", 5), null), new ArrayList<>(), false);
-    testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+	@Test
+	public void test3() throws Exception {
 
-    rdi.seek(new Range(newKey("r1", "cf1", "cq4", 5), null), new ArrayList<>(), false);
-    testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+		TreeMap<Key, Value> tm1 = new TreeMap<>();
+		put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
+		put(tm1, "r1", "", "cq1", 5, "v1");
+		put(tm1, "r1", "cf1", "cq1", 5, "v1");
+		put(tm1, "r2", "", "cq1", 5, "v1");
+		put(tm1, "r2", "cf1", "cq1", 5, "v1");
 
-    rdi.seek(new Range(newKey("r1", "cf1", "cq5", 20), null), new ArrayList<>(), false);
-    testAssertions(rdi, "r1", "cf1", "cq5", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+		RowDeletingIterator rdi = new RowDeletingIterator();
+		rdi.init(new ColumnFamilySkippingIterator(new SortedMapIterator(tm1)), null,
+				RowDeletingIteratorTest.mockIteratorEnvironment1(IteratorScope.scan, false));
 
-    rdi.seek(new Range(newKey("r1", "cf1", "cq9", 20), null), new ArrayList<>(), false);
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
-  }
+		HashSet<ByteSequence> cols = new HashSet<>();
+		cols.add(new ArrayByteSequence("cf1".getBytes()));
 
-  @Test
-  public void test3() throws Exception {
+		rdi.seek(new Range(), cols, true);
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    TreeMap<Key,Value> tm1 = new TreeMap<>();
-    put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
-    put(tm1, "r1", "", "cq1", 5, "v1");
-    put(tm1, "r1", "cf1", "cq1", 5, "v1");
-    put(tm1, "r2", "", "cq1", 5, "v1");
-    put(tm1, "r2", "cf1", "cq1", 5, "v1");
+		cols.clear();
+		cols.add(new ArrayByteSequence("".getBytes()));
+		rdi.seek(new Range(), cols, false);
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    RowDeletingIterator rdi = new RowDeletingIterator();
-    rdi.init(new ColumnFamilySkippingIterator(new SortedMapIterator(tm1)), null,
-        new TestIE(IteratorScope.scan, false));
+		cols.clear();
+		rdi.seek(new Range(), cols, false);
+		testAssertions(rdi, "r2", "", "cq1", 5, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+	}
 
-    HashSet<ByteSequence> cols = new HashSet<>();
-    cols.add(new ArrayByteSequence("cf1".getBytes()));
+	@Test
+	public void test4() throws Exception {
 
-    rdi.seek(new Range(), cols, true);
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+		TreeMap<Key, Value> tm1 = new TreeMap<>();
+		put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
+		put(tm1, "r1", "cf1", "cq1", 5, "v1");
+		put(tm1, "r1", "cf1", "cq3", 15, "v1");
+		put(tm1, "r1", "cf1", "cq4", 5, "v1");
+		put(tm1, "r2", "cf1", "cq1", 5, "v1");
 
-    cols.clear();
-    cols.add(new ArrayByteSequence("".getBytes()));
-    rdi.seek(new Range(), cols, false);
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
+		RowDeletingIterator rdi = new RowDeletingIterator();
+		rdi.init(new SortedMapIterator(tm1), null,
+				RowDeletingIteratorTest.mockIteratorEnvironment1(IteratorScope.minc, false));
 
-    cols.clear();
-    rdi.seek(new Range(), cols, false);
-    testAssertions(rdi, "r2", "", "cq1", 5, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
-  }
+		rdi.seek(new Range(), new ArrayList<>(), false);
+		testAssertions(rdi, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE.toString());
+		rdi.next();
+		testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-  @Test
-  public void test4() throws Exception {
+		rdi.seek(new Range(newKey("r1", "cf1", "cq3", 20), null), new ArrayList<>(), false);
+		testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    TreeMap<Key,Value> tm1 = new TreeMap<>();
-    put(tm1, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE);
-    put(tm1, "r1", "cf1", "cq1", 5, "v1");
-    put(tm1, "r1", "cf1", "cq3", 15, "v1");
-    put(tm1, "r1", "cf1", "cq4", 5, "v1");
-    put(tm1, "r2", "cf1", "cq1", 5, "v1");
+		rdi.seek(new Range(newKey("r1", "", "", 42), null), new ArrayList<>(), false);
+		testAssertions(rdi, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE.toString());
+		rdi.next();
+		testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
+		rdi.next();
+		testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
 
-    RowDeletingIterator rdi = new RowDeletingIterator();
-    rdi.init(new SortedMapIterator(tm1), null, new TestIE(IteratorScope.minc, false));
-
-    rdi.seek(new Range(), new ArrayList<>(), false);
-    testAssertions(rdi, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE.toString());
-    rdi.next();
-    testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
-
-    rdi.seek(new Range(newKey("r1", "cf1", "cq3", 20), null), new ArrayList<>(), false);
-    testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
-
-    rdi.seek(new Range(newKey("r1", "", "", 42), null), new ArrayList<>(), false);
-    testAssertions(rdi, "r1", "", "", 10, RowDeletingIterator.DELETE_ROW_VALUE.toString());
-    rdi.next();
-    testAssertions(rdi, "r1", "cf1", "cq3", 15, "v1");
-    rdi.next();
-    testAssertions(rdi, "r2", "cf1", "cq1", 5, "v1");
-
-  }
+	}
 
 }

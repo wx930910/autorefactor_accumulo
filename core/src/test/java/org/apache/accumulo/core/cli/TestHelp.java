@@ -19,29 +19,35 @@ package org.apache.accumulo.core.cli;
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class TestHelp {
-  protected class HelpStub extends Help {
-    @Override
-    public void parseArgs(String programName, String[] args, Object... others) {
-      super.parseArgs(programName, args, others);
-    }
+	public Help mockHelp1() {
+		Help mockInstance = Mockito.spy(Help.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				int status = stubInvo.getArgument(0);
+				throw new RuntimeException(Integer.toString(status));
+			}).when(mockInstance).exit(Mockito.anyInt());
+			Mockito.doAnswer((stubInvo) -> {
+				stubInvo.callRealMethod();
+				return null;
+			}).when(mockInstance).parseArgs(Mockito.any(String.class), Mockito.any(String[].class),
+					Mockito.any(Object[].class));
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    @Override
-    public void exit(int status) {
-      throw new RuntimeException(Integer.toString(status));
-    }
-  }
-
-  @Test
-  public void testInvalidArgs() {
-    String[] args = {"foo"};
-    HelpStub help = new HelpStub();
-    try {
-      help.parseArgs("program", args);
-    } catch (RuntimeException e) {
-      assertEquals("1", e.getMessage());
-    }
-  }
+	@Test
+	public void testInvalidArgs() {
+		String[] args = { "foo" };
+		Help help = mockHelp1();
+		try {
+			help.parseArgs("program", args);
+		} catch (RuntimeException e) {
+			assertEquals("1", e.getMessage());
+		}
+	}
 
 }

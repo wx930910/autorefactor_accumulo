@@ -69,7 +69,7 @@ public class ColumnSliceFilterTest {
 	@Before
 	public void setUp() {
 		columnSliceFilter.describeOptions();
-		iteratorEnvironment = new DefaultIteratorEnvironment();
+		iteratorEnvironment = DefaultIteratorEnvironment.mockIteratorEnvironment1();
 		is = new IteratorSetting(1, ColumnSliceFilter.class);
 	}
 

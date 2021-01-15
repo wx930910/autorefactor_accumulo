@@ -22,79 +22,82 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class ValidatorTest {
-  private static class TestValidator extends Validator<String> {
-    private final String s;
+	static public Validator<String> mockValidator2(String s) {
+		String[] mockFieldVariablePs = new String[1];
+		Validator<String> mockInstance = Mockito.spy(Validator.class);
+		mockFieldVariablePs[0] = s;
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				String argument = stubInvo.getArgument(0);
+				return (argument != null && argument.matches(mockFieldVariablePs[0]));
+			}).when(mockInstance).test(Mockito.any());
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    TestValidator(String s) {
-      this.s = s;
-    }
+	static public Validator<String> mockValidator1(String s) {
+		String[] mockFieldVariableS = new String[1];
+		Validator<String> mockInstance = Mockito.spy(Validator.class);
+		mockFieldVariableS[0] = s;
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				String argument = stubInvo.getArgument(0);
+				return mockFieldVariableS[0].equals(argument);
+			}).when(mockInstance).test(Mockito.any());
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    @Override
-    public boolean test(String argument) {
-      return s.equals(argument);
-    }
-  }
+	private Validator<String> v, v2, v3;
 
-  private static class Test2Validator extends Validator<String> {
-    private final String ps;
+	@Before
+	public void setUp() {
+		v = ValidatorTest.mockValidator1("correct");
+		v2 = ValidatorTest.mockValidator1("righto");
+		v3 = ValidatorTest.mockValidator2("c.*");
+	}
 
-    Test2Validator(String s) {
-      ps = s;
-    }
+	@Test
+	public void testValidate_Success() {
+		assertEquals("correct", v.validate("correct"));
+	}
 
-    @Override
-    public boolean test(String argument) {
-      return (argument != null && argument.matches(ps));
-    }
-  }
+	@Test(expected = IllegalArgumentException.class)
+	public void testValidate_Failure() {
+		v.validate("incorrect");
+	}
 
-  private Validator<String> v, v2, v3;
+	@Test
+	public void testInvalidMessage() {
+		assertEquals("Invalid argument incorrect", v.invalidMessage("incorrect"));
+	}
 
-  @Before
-  public void setUp() {
-    v = new TestValidator("correct");
-    v2 = new TestValidator("righto");
-    v3 = new Test2Validator("c.*");
-  }
+	@Test
+	public void testAnd() {
+		Validator<String> vand = v3.and(v);
+		assertTrue(vand.test("correct"));
+		assertFalse(vand.test("righto"));
+		assertFalse(vand.test("coriander"));
+	}
 
-  @Test
-  public void testValidate_Success() {
-    assertEquals("correct", v.validate("correct"));
-  }
+	@Test
+	public void testOr() {
+		Validator<String> vor = v.or(v2);
+		assertTrue(vor.test("correct"));
+		assertTrue(vor.test("righto"));
+		assertFalse(vor.test("coriander"));
+	}
 
-  @Test(expected = IllegalArgumentException.class)
-  public void testValidate_Failure() {
-    v.validate("incorrect");
-  }
-
-  @Test
-  public void testInvalidMessage() {
-    assertEquals("Invalid argument incorrect", v.invalidMessage("incorrect"));
-  }
-
-  @Test
-  public void testAnd() {
-    Validator<String> vand = v3.and(v);
-    assertTrue(vand.test("correct"));
-    assertFalse(vand.test("righto"));
-    assertFalse(vand.test("coriander"));
-  }
-
-  @Test
-  public void testOr() {
-    Validator<String> vor = v.or(v2);
-    assertTrue(vor.test("correct"));
-    assertTrue(vor.test("righto"));
-    assertFalse(vor.test("coriander"));
-  }
-
-  @Test
-  public void testNot() {
-    Validator<String> vnot = v3.not();
-    assertFalse(vnot.test("correct"));
-    assertFalse(vnot.test("coriander"));
-    assertTrue(vnot.test("righto"));
-  }
+	@Test
+	public void testNot() {
+		Validator<String> vnot = v3.not();
+		assertFalse(vnot.test("correct"));
+		assertFalse(vnot.test("coriander"));
+		assertTrue(vnot.test("righto"));
+	}
 }

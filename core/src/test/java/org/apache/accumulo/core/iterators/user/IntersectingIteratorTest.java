@@ -45,7 +45,7 @@ import org.junit.rules.TestName;
 public class IntersectingIteratorTest {
 
 	private static final Collection<ByteSequence> EMPTY_COL_FAMS = new ArrayList<>();
-	private static IteratorEnvironment env = new DefaultIteratorEnvironment();
+	private static IteratorEnvironment env = DefaultIteratorEnvironment.mockIteratorEnvironment1();
 
 	TreeMap<Key, Value> map;
 	HashSet<Text> docs = new HashSet<>();

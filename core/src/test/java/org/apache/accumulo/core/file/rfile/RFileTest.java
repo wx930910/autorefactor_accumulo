@@ -93,6 +93,7 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+import org.mockito.Mockito;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
@@ -104,23 +105,20 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 @SuppressFBWarnings(value = "PATH_TRAVERSAL_IN", justification = "paths not set by user input")
 public class RFileTest {
 
-	public static class SampleIE implements IteratorEnvironment {
-
-		private SamplerConfiguration samplerConfig;
-
-		SampleIE(SamplerConfiguration config) {
-			this.samplerConfig = config;
+	static public IteratorEnvironment mockIteratorEnvironment1(SamplerConfiguration config) {
+		SamplerConfiguration[] mockFieldVariableSamplerConfig = new SamplerConfiguration[1];
+		IteratorEnvironment mockInstance = Mockito.spy(IteratorEnvironment.class);
+		mockFieldVariableSamplerConfig[0] = config;
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return mockFieldVariableSamplerConfig[0] != null;
+			}).when(mockInstance).isSamplingEnabled();
+			Mockito.doAnswer((stubInvo) -> {
+				return mockFieldVariableSamplerConfig[0];
+			}).when(mockInstance).getSamplerConfiguration();
+		} catch (Exception exception) {
 		}
-
-		@Override
-		public boolean isSamplingEnabled() {
-			return samplerConfig != null;
-		}
-
-		@Override
-		public SamplerConfiguration getSamplerConfiguration() {
-			return samplerConfig;
-		}
+		return mockInstance;
 	}
 
 	private static final Collection<ByteSequence> EMPTY_COL_FAMS = new ArrayList<>();
@@ -2061,7 +2059,7 @@ public class RFileTest {
 
 				assertEquals(expectedDataHash, hash(trf.reader));
 
-				SampleIE ie = new SampleIE(
+				IteratorEnvironment ie = RFileTest.mockIteratorEnvironment1(
 						SamplerConfigurationImpl.newSamplerConfig(sampleConf).toSamplerConfiguration());
 
 				for (int i = 0; i < 3; i++) {
@@ -2072,8 +2070,10 @@ public class RFileTest {
 					SortedKeyValueIterator<Key, Value> sampleDC1 = sample.deepCopy(ie);
 					SortedKeyValueIterator<Key, Value> sampleDC2 = sample.deepCopy(ie);
 					SortedKeyValueIterator<Key, Value> sampleDC3 = trf.reader.deepCopy(ie);
-					SortedKeyValueIterator<Key, Value> allDC1 = sampleDC1.deepCopy(new SampleIE(null));
-					SortedKeyValueIterator<Key, Value> allDC2 = sample.deepCopy(new SampleIE(null));
+					SortedKeyValueIterator<Key, Value> allDC1 = sampleDC1
+							.deepCopy(RFileTest.mockIteratorEnvironment1(null));
+					SortedKeyValueIterator<Key, Value> allDC2 = sample
+							.deepCopy(RFileTest.mockIteratorEnvironment1(null));
 
 					assertEquals(expectedDataHash, hash(allDC1));
 					assertEquals(expectedDataHash, hash(allDC2));

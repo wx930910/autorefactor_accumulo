@@ -16,116 +16,100 @@
  */
 package org.apache.accumulo.fate;
 
-import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.accumulo.fate.ReadOnlyTStore.TStatus;
+import org.mockito.Mockito;
 
 /**
  * Transient in memory store for transactions.
  */
-public class SimpleStore<T> implements TStore<T> {
+public class SimpleStore {
 
-  private long nextId = 1;
-  private Map<Long,TStatus> statuses = new HashMap<>();
-  private Set<Long> reserved = new HashSet<>();
-
-  @Override
-  public long create() {
-    statuses.put(nextId, TStatus.NEW);
-    return nextId++;
-  }
-
-  @Override
-  public long reserve() {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void reserve(long tid) {
-    if (reserved.contains(tid))
-      throw new IllegalStateException(); // zoo store would wait, but do not expect test to reserve
-                                         // twice... if test change, then change this
-    reserved.add(tid);
-  }
-
-  @Override
-  public void unreserve(long tid, long deferTime) {
-    if (!reserved.remove(tid)) {
-      throw new IllegalStateException();
-    }
-  }
-
-  @Override
-  public Repo<T> top(long tid) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void push(long tid, Repo<T> repo) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void pop(long tid) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public org.apache.accumulo.fate.TStore.TStatus getStatus(long tid) {
-    if (!reserved.contains(tid))
-      throw new IllegalStateException();
-
-    TStatus status = statuses.get(tid);
-    if (status == null)
-      return TStatus.UNKNOWN;
-    return status;
-  }
-
-  @Override
-  public void setStatus(long tid, org.apache.accumulo.fate.TStore.TStatus status) {
-    if (!reserved.contains(tid))
-      throw new IllegalStateException();
-    if (!statuses.containsKey(tid))
-      throw new IllegalStateException();
-    statuses.put(tid, status);
-  }
-
-  @Override
-  public org.apache.accumulo.fate.TStore.TStatus waitForStatusChange(long tid,
-      EnumSet<org.apache.accumulo.fate.TStore.TStatus> expected) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void setProperty(long tid, String prop, Serializable val) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public Serializable getProperty(long tid, String prop) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void delete(long tid) {
-    if (!reserved.contains(tid))
-      throw new IllegalStateException();
-    statuses.remove(tid);
-  }
-
-  @Override
-  public List<Long> list() {
-    return new ArrayList<>(statuses.keySet());
-  }
-
-  @Override
-  public List<ReadOnlyRepo<T>> getStack(long tid) {
-    throw new UnsupportedOperationException();
-  }
+	static public TStore<String> mockTStore1() {
+		long[] mockFieldVariableNextId = new long[] { 1 };
+		Set<Long> mockFieldVariableReserved = new HashSet<>();
+		Map<Long, TStatus> mockFieldVariableStatuses = new HashMap<>();
+		TStore<String> mockInstance = Mockito.spy(TStore.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				long tid = stubInvo.getArgument(0);
+				if (!mockFieldVariableReserved.contains(tid))
+					throw new IllegalStateException();
+				mockFieldVariableStatuses.remove(tid);
+				return null;
+			}).when(mockInstance).delete(Mockito.anyLong());
+			Mockito.doAnswer((stubInvo) -> {
+				long tid = stubInvo.getArgument(0);
+				TStatus status = stubInvo.getArgument(1);
+				if (!mockFieldVariableReserved.contains(tid))
+					throw new IllegalStateException();
+				if (!mockFieldVariableStatuses.containsKey(tid))
+					throw new IllegalStateException();
+				mockFieldVariableStatuses.put(tid, status);
+				return null;
+			}).when(mockInstance).setStatus(Mockito.anyLong(), Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).getProperty(Mockito.anyLong(), Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).setProperty(Mockito.anyLong(), Mockito.any(), Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).waitForStatusChange(Mockito.anyLong(), Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).reserve();
+			Mockito.doAnswer((stubInvo) -> {
+				long tid = stubInvo.getArgument(0);
+				if (mockFieldVariableReserved.contains(tid))
+					throw new IllegalStateException();
+				mockFieldVariableReserved.add(tid);
+				return null;
+			}).when(mockInstance).reserve(Mockito.anyLong());
+			Mockito.doAnswer((stubInvo) -> {
+				long tid = stubInvo.getArgument(0);
+				if (!mockFieldVariableReserved.contains(tid))
+					throw new IllegalStateException();
+				TStatus status = mockFieldVariableStatuses.get(tid);
+				if (status == null)
+					return TStatus.UNKNOWN;
+				return status;
+			}).when(mockInstance).getStatus(Mockito.anyLong());
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).top(Mockito.anyLong());
+			Mockito.doAnswer((stubInvo) -> {
+				long tid = stubInvo.getArgument(0);
+				if (!mockFieldVariableReserved.remove(tid)) {
+					throw new IllegalStateException();
+				}
+				return null;
+			}).when(mockInstance).unreserve(Mockito.anyLong(), Mockito.anyLong());
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).pop(Mockito.anyLong());
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).getStack(Mockito.anyLong());
+			Mockito.doAnswer((stubInvo) -> {
+				return new ArrayList<>(mockFieldVariableStatuses.keySet());
+			}).when(mockInstance).list();
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).push(Mockito.anyLong(), Mockito.any());
+			Mockito.doAnswer((stubInvo) -> {
+				mockFieldVariableStatuses.put(mockFieldVariableNextId[0], TStatus.NEW);
+				return mockFieldVariableNextId[0]++;
+			}).when(mockInstance).create();
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
 }

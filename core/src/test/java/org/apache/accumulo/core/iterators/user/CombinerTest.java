@@ -32,6 +32,8 @@ import java.util.TreeMap;
 
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.lexicoder.Encoder;
+import org.apache.accumulo.core.conf.AccumuloConfiguration;
+import org.apache.accumulo.core.conf.DefaultConfiguration;
 import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Range;
@@ -39,7 +41,6 @@ import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.Combiner;
 import org.apache.accumulo.core.iterators.Combiner.ValueIterator;
 import org.apache.accumulo.core.iterators.CombinerTestUtil;
-import org.apache.accumulo.core.iterators.DefaultIteratorEnvironment;
 import org.apache.accumulo.core.iterators.IteratorEnvironment;
 import org.apache.accumulo.core.iterators.IteratorUtil.IteratorScope;
 import org.apache.accumulo.core.iterators.LongCombiner;
@@ -50,39 +51,51 @@ import org.apache.accumulo.core.iterators.SortedKeyValueIterator;
 import org.apache.accumulo.core.iterators.SortedMapIterator;
 import org.apache.accumulo.core.iterators.TypedValueCombiner;
 import org.apache.accumulo.core.iterators.ValueFormatException;
+import org.apache.accumulo.core.iterators.system.MapFileIterator;
 import org.apache.accumulo.core.iterators.system.MultiIterator;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.Text;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PatternLayout;
 import org.apache.log4j.WriterAppender;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class CombinerTest {
 
-	private static final Collection<ByteSequence> EMPTY_COL_FAMS = new ArrayList<>();
-
-	static class CombinerIteratorEnvironment extends DefaultIteratorEnvironment {
-
-		private IteratorScope scope;
-		private boolean isFullMajc;
-
-		CombinerIteratorEnvironment(IteratorScope scope, boolean isFullMajc) {
-			this.scope = scope;
-			this.isFullMajc = isFullMajc;
+	static public IteratorEnvironment mockIteratorEnvironment1(IteratorScope scope, boolean isFullMajc) {
+		boolean[] mockFieldVariableIsFullMajc = new boolean[1];
+		AccumuloConfiguration mockFieldVariableConf = null;
+		IteratorScope[] mockFieldVariableScope = new IteratorScope[1];
+		Configuration mockFieldVariableHadoopConf = new Configuration();
+		IteratorEnvironment mockInstance = Mockito.spy(IteratorEnvironment.class);
+		mockFieldVariableScope[0] = scope;
+		mockFieldVariableIsFullMajc[0] = isFullMajc;
+		mockFieldVariableConf = DefaultConfiguration.getInstance();
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return false;
+			}).when(mockInstance).isSamplingEnabled();
+			Mockito.doAnswer((stubInvo) -> {
+				String mapFileName = stubInvo.getArgument(0);
+				FileSystem fs = FileSystem.get(mockFieldVariableHadoopConf);
+				return new MapFileIterator(fs, mapFileName, mockFieldVariableHadoopConf);
+			}).when(mockInstance).reserveMapFileReader(Mockito.any(String.class));
+			Mockito.doAnswer((stubInvo) -> {
+				return mockFieldVariableScope[0];
+			}).when(mockInstance).getIteratorScope();
+			Mockito.doAnswer((stubInvo) -> {
+				return mockFieldVariableIsFullMajc[0];
+			}).when(mockInstance).isFullMajorCompaction();
+		} catch (Exception exception) {
 		}
-
-		@Override
-		public IteratorScope getIteratorScope() {
-			return scope;
-		}
-
-		@Override
-		public boolean isFullMajorCompaction() {
-			return isFullMajc;
-		}
+		return mockInstance;
 	}
 
-	static final IteratorEnvironment SCAN_IE = new CombinerIteratorEnvironment(IteratorScope.scan, false);
+	private static final Collection<ByteSequence> EMPTY_COL_FAMS = new ArrayList<>();
+
+	static final IteratorEnvironment SCAN_IE = CombinerTest.mockIteratorEnvironment1(IteratorScope.scan, false);
 
 	static Key newKey(int row, int colf, int colq, long ts, boolean deleted) {
 		Key k = newKey(row, colf, colq, ts);
@@ -908,8 +921,8 @@ public class CombinerTest {
 
 		TreeMap<Key, Value> input = new TreeMap<>();
 
-		IteratorEnvironment paritalMajcIe = new CombinerIteratorEnvironment(IteratorScope.majc, false);
-		IteratorEnvironment fullMajcIe = new CombinerIteratorEnvironment(IteratorScope.majc, true);
+		IteratorEnvironment paritalMajcIe = CombinerTest.mockIteratorEnvironment1(IteratorScope.majc, false);
+		IteratorEnvironment fullMajcIe = CombinerTest.mockIteratorEnvironment1(IteratorScope.majc, true);
 
 		// keys that aggregate
 		newKeyValue(input, 1, 1, 1, 1, false, 4L, encoder);

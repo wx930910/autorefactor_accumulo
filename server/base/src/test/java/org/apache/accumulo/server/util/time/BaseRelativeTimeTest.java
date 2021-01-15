@@ -20,71 +20,105 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class BaseRelativeTimeTest {
 
-  static class BogusTime implements ProvidesTime {
-    public long value = 0;
+	@Test
+	public void testMatchesTime() {
+		ProvidesTime bt = Mockito.spy(ProvidesTime.class);
+		long[] btValue = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return btValue[0];
+			}).when(bt).currentTime();
+		} catch (Exception exception) {
+		}
+		ProvidesTime now = Mockito.spy(ProvidesTime.class);
+		long[] nowValue = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return nowValue[0];
+			}).when(now).currentTime();
+		} catch (Exception exception) {
+		}
+		nowValue[0] = btValue[0] = System.currentTimeMillis();
 
-    @Override
-    public long currentTime() {
-      return value;
-    }
-  }
+		BaseRelativeTime brt = new BaseRelativeTime(now);
+		assertEquals(brt.currentTime(), nowValue[0]);
+		brt.updateTime(nowValue[0]);
+		assertEquals(brt.currentTime(), nowValue[0]);
+	}
 
-  @Test
-  public void testMatchesTime() {
-    BogusTime bt = new BogusTime();
-    BogusTime now = new BogusTime();
-    now.value = bt.value = System.currentTimeMillis();
+	@Test
+	public void testFutureTime() {
+		ProvidesTime advice = Mockito.spy(ProvidesTime.class);
+		long[] adviceValue = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return adviceValue[0];
+			}).when(advice).currentTime();
+		} catch (Exception exception) {
+		}
+		ProvidesTime local = Mockito.spy(ProvidesTime.class);
+		long[] localValue = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return localValue[0];
+			}).when(local).currentTime();
+		} catch (Exception exception) {
+		}
+		localValue[0] = adviceValue[0] = System.currentTimeMillis();
+		// Ten seconds into the future
+		adviceValue[0] += 10000;
 
-    BaseRelativeTime brt = new BaseRelativeTime(now);
-    assertEquals(brt.currentTime(), now.value);
-    brt.updateTime(now.value);
-    assertEquals(brt.currentTime(), now.value);
-  }
+		BaseRelativeTime brt = new BaseRelativeTime(local);
+		assertEquals(brt.currentTime(), localValue[0]);
+		brt.updateTime(adviceValue[0]);
+		long once = brt.currentTime();
+		assertTrue(once < adviceValue[0]);
+		assertTrue(once > localValue[0]);
 
-  @Test
-  public void testFutureTime() {
-    BogusTime advice = new BogusTime();
-    BogusTime local = new BogusTime();
-    local.value = advice.value = System.currentTimeMillis();
-    // Ten seconds into the future
-    advice.value += 10000;
+		for (int i = 0; i < 100; i++) {
+			brt.updateTime(adviceValue[0]);
+		}
+		long many = brt.currentTime();
+		assertTrue(many > once);
+		assertTrue("after much advice, relative time is still closer to local time",
+				(adviceValue[0] - many) < (once - localValue[0]));
+	}
 
-    BaseRelativeTime brt = new BaseRelativeTime(local);
-    assertEquals(brt.currentTime(), local.value);
-    brt.updateTime(advice.value);
-    long once = brt.currentTime();
-    assertTrue(once < advice.value);
-    assertTrue(once > local.value);
+	@Test
+	public void testPastTime() {
+		ProvidesTime advice = Mockito.spy(ProvidesTime.class);
+		long[] adviceValue = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return adviceValue[0];
+			}).when(advice).currentTime();
+		} catch (Exception exception) {
+		}
+		ProvidesTime local = Mockito.spy(ProvidesTime.class);
+		long[] localValue = new long[] { 0 };
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return localValue[0];
+			}).when(local).currentTime();
+		} catch (Exception exception) {
+		}
+		localValue[0] = adviceValue[0] = System.currentTimeMillis();
+		// Ten seconds into the past
+		adviceValue[0] -= 10000;
 
-    for (int i = 0; i < 100; i++) {
-      brt.updateTime(advice.value);
-    }
-    long many = brt.currentTime();
-    assertTrue(many > once);
-    assertTrue("after much advice, relative time is still closer to local time",
-        (advice.value - many) < (once - local.value));
-  }
-
-  @Test
-  public void testPastTime() {
-    BogusTime advice = new BogusTime();
-    BogusTime local = new BogusTime();
-    local.value = advice.value = System.currentTimeMillis();
-    // Ten seconds into the past
-    advice.value -= 10000;
-
-    BaseRelativeTime brt = new BaseRelativeTime(local);
-    brt.updateTime(advice.value);
-    long once = brt.currentTime();
-    assertTrue(once < local.value);
-    brt.updateTime(advice.value);
-    long twice = brt.currentTime();
-    assertTrue("Time cannot go backwards", once <= twice);
-    brt.updateTime(advice.value - 10000);
-    assertTrue("Time cannot go backwards", once <= twice);
-  }
+		BaseRelativeTime brt = new BaseRelativeTime(local);
+		brt.updateTime(adviceValue[0]);
+		long once = brt.currentTime();
+		assertTrue(once < localValue[0]);
+		brt.updateTime(adviceValue[0]);
+		long twice = brt.currentTime();
+		assertTrue("Time cannot go backwards", once <= twice);
+		brt.updateTime(adviceValue[0] - 10000);
+		assertTrue("Time cannot go backwards", once <= twice);
+	}
 
 }

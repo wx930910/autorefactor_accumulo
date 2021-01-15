@@ -41,47 +41,69 @@ import org.apache.accumulo.core.iterators.SortedMapIterator;
 import org.apache.accumulo.core.iterators.system.ColumnFamilySkippingIterator;
 import org.apache.hadoop.io.Text;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import com.google.common.collect.ImmutableSet;
 
 public class RowFilterTest {
 
-	public static class SummingRowFilter extends RowFilter {
-
-		@Override
-		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) throws IOException {
-			int sum = 0;
-			int sum2 = 0;
-
-			Key firstKey = null;
-
-			if (rowIterator.hasTop()) {
-				firstKey = new Key(rowIterator.getTopKey());
-			}
-
-			while (rowIterator.hasTop()) {
-				sum += Integer.parseInt(rowIterator.getTopValue().toString());
-				rowIterator.next();
-			}
-
-			// ensure that seeks are confined to the row
-			rowIterator.seek(new Range(null, false, firstKey == null ? null : firstKey.getRow(), false),
-					new HashSet<>(), false);
-			while (rowIterator.hasTop()) {
-				sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
-				rowIterator.next();
-			}
-
-			rowIterator.seek(new Range(firstKey == null ? null : firstKey.getRow(), false, null, true), new HashSet<>(),
-					false);
-			while (rowIterator.hasTop()) {
-				sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
-				rowIterator.next();
-			}
-
-			return sum == 2 && sum2 == 0;
+	static public RowFilter mockRowFilter3() {
+		RowFilter mockInstance = Mockito.spy(RowFilter.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return true;
+			}).when(mockInstance).acceptRow(Mockito.any(SortedKeyValueIterator.class));
+		} catch (Exception exception) {
 		}
+		return mockInstance;
+	}
 
+	static public RowFilter mockRowFilter2() {
+		Set<String> mockFieldVariablePassRows = new HashSet<>(Arrays.asList("1", "2"));
+		RowFilter mockInstance = Mockito.spy(RowFilter.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				SortedKeyValueIterator<Key, Value> rowIterator = stubInvo.getArgument(0);
+				return rowIterator.hasTop()
+						&& mockFieldVariablePassRows.contains(rowIterator.getTopKey().getRow().toString());
+			}).when(mockInstance).acceptRow(Mockito.any(SortedKeyValueIterator.class));
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
+
+	static public RowFilter mockRowFilter1() {
+		RowFilter mockInstance = Mockito.spy(RowFilter.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				SortedKeyValueIterator<Key, Value> rowIterator = stubInvo.getArgument(0);
+				int sum = 0;
+				int sum2 = 0;
+				Key firstKey = null;
+				if (rowIterator.hasTop()) {
+					firstKey = new Key(rowIterator.getTopKey());
+				}
+				while (rowIterator.hasTop()) {
+					sum += Integer.parseInt(rowIterator.getTopValue().toString());
+					rowIterator.next();
+				}
+				rowIterator.seek(new Range(null, false, firstKey == null ? null : firstKey.getRow(), false),
+						new HashSet<>(), false);
+				while (rowIterator.hasTop()) {
+					sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
+					rowIterator.next();
+				}
+				rowIterator.seek(new Range(firstKey == null ? null : firstKey.getRow(), false, null, true),
+						new HashSet<>(), false);
+				while (rowIterator.hasTop()) {
+					sum2 += Integer.parseInt(rowIterator.getTopValue().toString());
+					rowIterator.next();
+				}
+				return sum == 2 && sum2 == 0;
+			}).when(mockInstance).acceptRow(Mockito.any(SortedKeyValueIterator.class));
+		} catch (Exception exception) {
+		}
+		return mockInstance;
 	}
 
 	public static class RowZeroOrOneFilter extends RowFilter {
@@ -90,22 +112,6 @@ public class RowFilterTest {
 		@Override
 		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) {
 			return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
-		}
-	}
-
-	public static class RowOneOrTwoFilter extends RowFilter {
-		private static final Set<String> passRows = new HashSet<>(Arrays.asList("1", "2"));
-
-		@Override
-		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) {
-			return rowIterator.hasTop() && passRows.contains(rowIterator.getTopKey().getRow().toString());
-		}
-	}
-
-	public static class TrueFilter extends RowFilter {
-		@Override
-		public boolean acceptRow(SortedKeyValueIterator<Key, Value> rowIterator) {
-			return true;
 		}
 	}
 
@@ -183,8 +189,8 @@ public class RowFilterTest {
 		ColumnFamilySkippingIterator source = new ColumnFamilySkippingIterator(
 				new SortedMapIterator(createKeyValues()));
 
-		RowFilter filter = new SummingRowFilter();
-		filter.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		RowFilter filter = RowFilterTest.mockRowFilter1();
+		filter.init(source, Collections.emptyMap(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
 		filter.seek(new Range(), Collections.emptySet(), false);
 
@@ -213,11 +219,11 @@ public class RowFilterTest {
 	public void testChainedRowFilters() throws Exception {
 		SortedMapIterator source = new SortedMapIterator(createKeyValues());
 
-		RowFilter filter0 = new TrueFilter();
-		filter0.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		RowFilter filter0 = RowFilterTest.mockRowFilter3();
+		filter0.init(source, Collections.emptyMap(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
-		RowFilter filter = new TrueFilter();
-		filter.init(filter0, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		RowFilter filter = RowFilterTest.mockRowFilter3();
+		filter.init(filter0, Collections.emptyMap(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
 		filter.seek(new Range(), Collections.emptySet(), false);
 
@@ -229,11 +235,11 @@ public class RowFilterTest {
 
 		SortedMapIterator source = new SortedMapIterator(createKeyValues());
 
-		RowFilter filter0 = new RowZeroOrOneFilter();
-		filter0.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		RowFilter filter0 = RowFilterTest.mockRowFilter1();
+		filter0.init(source, Collections.emptyMap(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
-		RowFilter filter = new RowOneOrTwoFilter();
-		filter.init(filter0, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		RowFilter filter = RowFilterTest.mockRowFilter2();
+		filter.init(filter0, Collections.emptyMap(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
 		filter.seek(new Range(), Collections.emptySet(), false);
 
@@ -244,8 +250,8 @@ public class RowFilterTest {
 	public void deepCopyCopiesTheSource() throws Exception {
 		SortedMapIterator source = new SortedMapIterator(createKeyValues());
 
-		RowFilter filter = new RowZeroOrOneFilter();
-		filter.init(source, Collections.emptyMap(), new DefaultIteratorEnvironment());
+		RowFilter filter = RowFilterTest.mockRowFilter1();
+		filter.init(source, Collections.emptyMap(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
 		filter.seek(new Range(), Collections.emptySet(), false);
 
@@ -265,7 +271,7 @@ public class RowFilterTest {
 		}
 
 		// Make a copy of the original RowFilter
-		RowFilter copy = (RowFilter) filter.deepCopy(new DefaultIteratorEnvironment());
+		RowFilter copy = (RowFilter) filter.deepCopy(DefaultIteratorEnvironment.mockIteratorEnvironment1());
 
 		// Because it's a copy, we should be able to safely seek this one without
 		// affecting the original

@@ -46,8 +46,21 @@ import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.security.ColumnVisibility;
 import org.apache.hadoop.io.Text;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class FilterTest {
+
+	static public Filter mockFilter1() {
+		Filter mockInstance = Mockito.spy(Filter.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				Key k = stubInvo.getArgument(0);
+				return !k.getColumnFamily().toString().equals("a");
+			}).when(mockInstance).accept(Mockito.any(Key.class), Mockito.any(Value.class));
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
 	private static final Collection<ByteSequence> EMPTY_COL_FAMS = new ArrayList<>();
 	private static final Map<String, String> EMPTY_OPTS = new HashMap<>();
@@ -57,13 +70,6 @@ public class FilterTest {
 		public boolean accept(Key k, Value v) {
 			// System.out.println(k.getRow());
 			return k.getRow().toString().endsWith("0");
-		}
-	}
-
-	public static class SimpleFilter2 extends Filter {
-		@Override
-		public boolean accept(Key k, Value v) {
-			return !k.getColumnFamily().toString().equals("a");
 		}
 	}
 
@@ -105,7 +111,7 @@ public class FilterTest {
 
 		filter1 = new SimpleFilter();
 		filter1.init(new SortedMapIterator(tm), EMPTY_OPTS, null);
-		Filter filter2 = new SimpleFilter2();
+		Filter filter2 = FilterTest.mockFilter1();
 		filter2.init(filter1, EMPTY_OPTS, null);
 		filter2.seek(new Range(), EMPTY_COL_FAMS, false);
 		size = size(filter2);
@@ -142,7 +148,7 @@ public class FilterTest {
 		assertEquals(450, size);
 
 		filter.init(new SortedMapIterator(tm), EMPTY_OPTS, null);
-		Filter filter2 = new SimpleFilter2();
+		Filter filter2 = FilterTest.mockFilter1();
 		filter2.init(filter, is.getOptions(), null);
 		filter2.seek(new Range(), EMPTY_COL_FAMS, false);
 		size = size(filter2);
@@ -229,19 +235,19 @@ public class FilterTest {
 
 		ColumnAgeOffFilter a = new ColumnAgeOffFilter();
 		assertTrue(a.validateOptions(is.getOptions()));
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
 		assertEquals(902, size(a));
 
 		ColumnAgeOffFilter.addTTL(is, new IteratorSetting.Column("a", "b"), 101L);
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
 		assertEquals(102, size(a));
 
 		ColumnAgeOffFilter.removeTTL(is, new IteratorSetting.Column("a", "b"));
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a = (ColumnAgeOffFilter) a.deepCopy(null);
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
@@ -271,19 +277,19 @@ public class FilterTest {
 
 		ColumnAgeOffFilter a = new ColumnAgeOffFilter();
 		assertTrue(a.validateOptions(is.getOptions()));
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
 		assertEquals(98, size(a));
 
 		ColumnAgeOffFilter.addTTL(is, new IteratorSetting.Column("a", "b"), 101L);
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
 		assertEquals(898, size(a));
 
 		ColumnAgeOffFilter.removeTTL(is, new IteratorSetting.Column("a", "b"));
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a = (ColumnAgeOffFilter) a.deepCopy(null);
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
@@ -312,19 +318,19 @@ public class FilterTest {
 
 		ColumnAgeOffFilter a = new ColumnAgeOffFilter();
 		assertTrue(a.validateOptions(is.getOptions()));
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
 		assertEquals(902, size(a));
 
 		ColumnAgeOffFilter.addTTL(is, new IteratorSetting.Column("negate", "b"), 101L);
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);
 		assertEquals(102, size(a));
 
 		ColumnAgeOffFilter.removeTTL(is, new IteratorSetting.Column("negate", "b"));
-		a.init(new SortedMapIterator(tm), is.getOptions(), new DefaultIteratorEnvironment());
+		a.init(new SortedMapIterator(tm), is.getOptions(), DefaultIteratorEnvironment.mockIteratorEnvironment1());
 		a = (ColumnAgeOffFilter) a.deepCopy(null);
 		a.overrideCurrentTime(ts);
 		a.seek(new Range(), EMPTY_COL_FAMS, false);

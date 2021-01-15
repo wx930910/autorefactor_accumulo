@@ -16,38 +16,50 @@
  */
 package org.apache.accumulo.core.iterators;
 
-import java.io.IOException;
-
 import org.apache.accumulo.core.conf.AccumuloConfiguration;
 import org.apache.accumulo.core.conf.DefaultConfiguration;
-import org.apache.accumulo.core.data.Key;
-import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.iterators.system.MapFileIterator;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.mockito.Mockito;
 
-public class DefaultIteratorEnvironment implements IteratorEnvironment {
+public class DefaultIteratorEnvironment {
 
-	AccumuloConfiguration conf;
-	Configuration hadoopConf = new Configuration();
-
-	public DefaultIteratorEnvironment(AccumuloConfiguration conf) {
-		this.conf = conf;
+	static public IteratorEnvironment mockIteratorEnvironment1() {
+		AccumuloConfiguration[] mockFieldVariableConf = new AccumuloConfiguration[1];
+		Configuration mockFieldVariableHadoopConf = new Configuration();
+		IteratorEnvironment mockInstance = Mockito.spy(IteratorEnvironment.class);
+		mockFieldVariableConf[0] = DefaultConfiguration.getInstance();
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return false;
+			}).when(mockInstance).isSamplingEnabled();
+			Mockito.doAnswer((stubInvo) -> {
+				String mapFileName = stubInvo.getArgument(0);
+				FileSystem fs = FileSystem.get(mockFieldVariableHadoopConf);
+				return new MapFileIterator(fs, mapFileName, mockFieldVariableHadoopConf);
+			}).when(mockInstance).reserveMapFileReader(Mockito.any(String.class));
+		} catch (Exception exception) {
+		}
+		return mockInstance;
 	}
 
-	public DefaultIteratorEnvironment() {
-		this.conf = DefaultConfiguration.getInstance();
-	}
-
-	@Deprecated
-	@Override
-	public SortedKeyValueIterator<Key, Value> reserveMapFileReader(String mapFileName) throws IOException {
-		FileSystem fs = FileSystem.get(hadoopConf);
-		return new MapFileIterator(fs, mapFileName, hadoopConf);
-	}
-
-	@Override
-	public boolean isSamplingEnabled() {
-		return false;
+	static public IteratorEnvironment mockIteratorEnvironment2(AccumuloConfiguration conf) {
+		AccumuloConfiguration[] mockFieldVariableConf = new AccumuloConfiguration[1];
+		Configuration mockFieldVariableHadoopConf = new Configuration();
+		IteratorEnvironment mockInstance = Mockito.spy(IteratorEnvironment.class);
+		mockFieldVariableConf[0] = conf;
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return false;
+			}).when(mockInstance).isSamplingEnabled();
+			Mockito.doAnswer((stubInvo) -> {
+				String mapFileName = stubInvo.getArgument(0);
+				FileSystem fs = FileSystem.get(mockFieldVariableHadoopConf);
+				return new MapFileIterator(fs, mapFileName, mockFieldVariableHadoopConf);
+			}).when(mockInstance).reserveMapFileReader(Mockito.any(String.class));
+		} catch (Exception exception) {
+		}
+		return mockInstance;
 	}
 }

@@ -48,7 +48,7 @@ public class IndexedDocIteratorTest {
 	private static final Collection<ByteSequence> EMPTY_COL_FAMS = new ArrayList<>();
 	private static final byte[] nullByte = { 0 };
 
-	private static IteratorEnvironment env = new DefaultIteratorEnvironment();
+	private static IteratorEnvironment env = DefaultIteratorEnvironment.mockIteratorEnvironment1();
 
 	TreeMap<Key, Value> map;
 	Text[] columnFamilies;

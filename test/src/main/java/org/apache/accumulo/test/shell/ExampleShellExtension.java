@@ -24,14 +24,14 @@ import com.google.auto.service.AutoService;
 @AutoService(ShellExtension.class)
 public class ExampleShellExtension extends ShellExtension {
 
-  @Override
-  public String getExtensionName() {
-    return "ExampleShellExtension";
-  }
+	@Override
+	public String getExtensionName() {
+		return "ExampleShellExtension";
+	}
 
-  @Override
-  public Command[] getCommands() {
-    return new Command[] {new DebugCommand()};
-  }
+	@Override
+	public Command[] getCommands() {
+		return new Command[] { DebugCommand.mockCommand1() };
+	}
 
 }

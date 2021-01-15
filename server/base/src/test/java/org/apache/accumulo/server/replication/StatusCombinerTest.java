@@ -38,19 +38,24 @@ import org.apache.accumulo.core.replication.ReplicationSchema.StatusSection;
 import org.apache.accumulo.server.replication.proto.Replication.Status;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class StatusCombinerTest {
+
+	static public IteratorEnvironment mockIteratorEnvironment1() {
+		IteratorEnvironment mockInstance = Mockito.spy(IteratorEnvironment.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				return IteratorScope.scan;
+			}).when(mockInstance).getIteratorScope();
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
 	private StatusCombiner combiner;
 	private Key key;
 	private Status.Builder builder;
-
-	private static class TestIE implements IteratorEnvironment {
-		@Override
-		public IteratorScope getIteratorScope() {
-			return IteratorScope.scan;
-		}
-	}
 
 	@Before
 	public void initCombiner() throws IOException {
@@ -59,7 +64,7 @@ public class StatusCombinerTest {
 		builder = Status.newBuilder();
 		IteratorSetting cfg = new IteratorSetting(50, StatusCombiner.class);
 		Combiner.setColumns(cfg, Collections.singletonList(new Column(StatusSection.NAME)));
-		combiner.init(new DevNull(), cfg.getOptions(), new TestIE());
+		combiner.init(new DevNull(), cfg.getOptions(), StatusCombinerTest.mockIteratorEnvironment1());
 	}
 
 	@Test

@@ -38,7 +38,7 @@ public class FirstEntryInRowIteratorTest {
 		org.apache.accumulo.core.iterators.SortedMapIterator source = new SortedMapIterator(sourceMap);
 		CountingIterator counter = new CountingIterator(source);
 		FirstEntryInRowIterator feiri = new FirstEntryInRowIterator();
-		IteratorEnvironment env = new DefaultIteratorEnvironment();
+		IteratorEnvironment env = DefaultIteratorEnvironment.mockIteratorEnvironment1();
 
 		feiri.init(counter, iteratorSetting.getOptions(), env);
 

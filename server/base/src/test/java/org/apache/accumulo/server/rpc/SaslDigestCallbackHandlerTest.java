@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.util.Map.Entry;
 
 import javax.crypto.KeyGenerator;
-import javax.security.auth.callback.Callback;
 
 import org.apache.accumulo.core.client.admin.DelegationTokenConfig;
 import org.apache.accumulo.core.clientImpl.AuthenticationTokenIdentifier;
@@ -36,89 +35,89 @@ import org.apache.hadoop.security.token.Token;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class SaslDigestCallbackHandlerTest {
 
-  /**
-   * Allows access to the methods on SaslDigestCallbackHandler
-   */
-  private static class SaslTestDigestCallbackHandler extends SaslDigestCallbackHandler {
-    @Override
-    public void handle(Callback[] callbacks) {
-      throw new UnsupportedOperationException();
-    }
-  }
+	static public SaslDigestCallbackHandler mockSaslDigestCallbackHandler1() {
+		SaslDigestCallbackHandler mockInstance = Mockito.spy(SaslDigestCallbackHandler.class);
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				throw new UnsupportedOperationException();
+			}).when(mockInstance).handle(Mockito.any());
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-  // From org.apache.hadoop.security.token.SecretManager
-  private static final String DEFAULT_HMAC_ALGORITHM = "HmacSHA1";
-  private static final int KEY_LENGTH = 64;
-  private static KeyGenerator keyGen;
+// From org.apache.hadoop.security.token.SecretManager
+	private static final String DEFAULT_HMAC_ALGORITHM = "HmacSHA1";
+	private static final int KEY_LENGTH = 64;
+	private static KeyGenerator keyGen;
 
-  @BeforeClass
-  public static void setupKeyGenerator() throws Exception {
-    // From org.apache.hadoop.security.token.SecretManager
-    keyGen = KeyGenerator.getInstance(DEFAULT_HMAC_ALGORITHM);
-    keyGen.init(KEY_LENGTH);
-  }
+	@BeforeClass
+	public static void setupKeyGenerator() throws Exception {
+		// From org.apache.hadoop.security.token.SecretManager
+		keyGen = KeyGenerator.getInstance(DEFAULT_HMAC_ALGORITHM);
+		keyGen.init(KEY_LENGTH);
+	}
 
-  private SaslTestDigestCallbackHandler handler;
-  private DelegationTokenConfig cfg;
+	private SaslDigestCallbackHandler handler;
+	private DelegationTokenConfig cfg;
 
-  @Before
-  public void setup() {
-    handler = new SaslTestDigestCallbackHandler();
-    cfg = new DelegationTokenConfig();
-  }
+	@Before
+	public void setup() {
+		handler = SaslDigestCallbackHandlerTest.mockSaslDigestCallbackHandler1();
+		cfg = new DelegationTokenConfig();
+	}
 
-  @Test
-  public void testIdentifierSerialization() throws IOException {
-    AuthenticationTokenIdentifier identifier =
-        new AuthenticationTokenIdentifier("user", 1, 100L, 1000L, "instanceid");
-    byte[] serialized = identifier.getBytes();
-    String name = handler.encodeIdentifier(serialized);
+	@Test
+	public void testIdentifierSerialization() throws IOException {
+		AuthenticationTokenIdentifier identifier = new AuthenticationTokenIdentifier("user", 1, 100L, 1000L,
+				"instanceid");
+		byte[] serialized = identifier.getBytes();
+		String name = handler.encodeIdentifier(serialized);
 
-    byte[] reserialized = handler.decodeIdentifier(name);
-    assertArrayEquals(serialized, reserialized);
+		byte[] reserialized = handler.decodeIdentifier(name);
+		assertArrayEquals(serialized, reserialized);
 
-    AuthenticationTokenIdentifier copy = new AuthenticationTokenIdentifier();
-    copy.readFields(new DataInputStream(new ByteArrayInputStream(reserialized)));
+		AuthenticationTokenIdentifier copy = new AuthenticationTokenIdentifier();
+		copy.readFields(new DataInputStream(new ByteArrayInputStream(reserialized)));
 
-    assertEquals(identifier, copy);
-  }
+		assertEquals(identifier, copy);
+	}
 
-  @Test
-  public void testTokenSerialization() throws Exception {
-    AuthenticationTokenSecretManager secretManager =
-        new AuthenticationTokenSecretManager("instanceid", 1000L);
+	@Test
+	public void testTokenSerialization() throws Exception {
+		AuthenticationTokenSecretManager secretManager = new AuthenticationTokenSecretManager("instanceid", 1000L);
 
-    secretManager.addKey(new AuthenticationKey(1, 0L, 100L, keyGen.generateKey()));
-    Entry<Token<AuthenticationTokenIdentifier>,AuthenticationTokenIdentifier> entry =
-        secretManager.generateToken("user", cfg);
-    byte[] password = entry.getKey().getPassword();
-    char[] encodedPassword = handler.encodePassword(password);
+		secretManager.addKey(new AuthenticationKey(1, 0L, 100L, keyGen.generateKey()));
+		Entry<Token<AuthenticationTokenIdentifier>, AuthenticationTokenIdentifier> entry = secretManager
+				.generateToken("user", cfg);
+		byte[] password = entry.getKey().getPassword();
+		char[] encodedPassword = handler.encodePassword(password);
 
-    char[] computedPassword = handler.getPassword(secretManager, entry.getValue());
+		char[] computedPassword = handler.getPassword(secretManager, entry.getValue());
 
-    assertArrayEquals(computedPassword, encodedPassword);
-  }
+		assertArrayEquals(computedPassword, encodedPassword);
+	}
 
-  @Test
-  public void testTokenAndIdentifierSerialization() throws Exception {
-    AuthenticationTokenSecretManager secretManager =
-        new AuthenticationTokenSecretManager("instanceid", 1000L);
+	@Test
+	public void testTokenAndIdentifierSerialization() throws Exception {
+		AuthenticationTokenSecretManager secretManager = new AuthenticationTokenSecretManager("instanceid", 1000L);
 
-    secretManager.addKey(new AuthenticationKey(1, 0L, 1000 * 100L, keyGen.generateKey()));
-    Entry<Token<AuthenticationTokenIdentifier>,AuthenticationTokenIdentifier> entry =
-        secretManager.generateToken("user", cfg);
-    byte[] password = entry.getKey().getPassword();
-    char[] encodedPassword = handler.encodePassword(password);
-    String name = handler.encodeIdentifier(entry.getValue().getBytes());
+		secretManager.addKey(new AuthenticationKey(1, 0L, 1000 * 100L, keyGen.generateKey()));
+		Entry<Token<AuthenticationTokenIdentifier>, AuthenticationTokenIdentifier> entry = secretManager
+				.generateToken("user", cfg);
+		byte[] password = entry.getKey().getPassword();
+		char[] encodedPassword = handler.encodePassword(password);
+		String name = handler.encodeIdentifier(entry.getValue().getBytes());
 
-    byte[] decodedIdentifier = handler.decodeIdentifier(name);
-    AuthenticationTokenIdentifier identifier = new AuthenticationTokenIdentifier();
-    identifier.readFields(new DataInputStream(new ByteArrayInputStream(decodedIdentifier)));
-    char[] computedPassword = handler.getPassword(secretManager, identifier);
+		byte[] decodedIdentifier = handler.decodeIdentifier(name);
+		AuthenticationTokenIdentifier identifier = new AuthenticationTokenIdentifier();
+		identifier.readFields(new DataInputStream(new ByteArrayInputStream(decodedIdentifier)));
+		char[] computedPassword = handler.getPassword(secretManager, identifier);
 
-    assertArrayEquals(computedPassword, encodedPassword);
-  }
+		assertArrayEquals(computedPassword, encodedPassword);
+	}
 }

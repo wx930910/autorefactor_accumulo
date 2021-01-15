@@ -21,115 +21,140 @@ import static org.junit.Assert.assertEquals;
 
 import java.util.LinkedList;
 
+import org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock;
 import org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlockQueue;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class TestCachedBlockQueue {
 
-  @Test
-  public void testQueue() {
+	static public org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock mockCachedBlock1(long heapSize,
+			String name, long accessTime) {
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock mockInstance = Mockito
+				.spy(new org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock(name,
+						new byte[(int) (heapSize - CachedBlock.PER_BLOCK_OVERHEAD)], accessTime, false));
+		try {
+		} catch (Exception exception) {
+		}
+		return mockInstance;
+	}
 
-    CachedBlock cb1 = new CachedBlock(1000, "cb1", 1);
-    CachedBlock cb2 = new CachedBlock(1500, "cb2", 2);
-    CachedBlock cb3 = new CachedBlock(1000, "cb3", 3);
-    CachedBlock cb4 = new CachedBlock(1500, "cb4", 4);
-    CachedBlock cb5 = new CachedBlock(1000, "cb5", 5);
-    CachedBlock cb6 = new CachedBlock(1750, "cb6", 6);
-    CachedBlock cb7 = new CachedBlock(1000, "cb7", 7);
-    CachedBlock cb8 = new CachedBlock(1500, "cb8", 8);
-    CachedBlock cb9 = new CachedBlock(1000, "cb9", 9);
-    CachedBlock cb10 = new CachedBlock(1500, "cb10", 10);
+	@Test
+	public void testQueue() {
 
-    CachedBlockQueue queue = new CachedBlockQueue(10000, 1000);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb1 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb1", 1);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb2 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb2", 2);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb3 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb3", 3);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb4 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb4", 4);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb5 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb5", 5);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb6 = TestCachedBlockQueue.mockCachedBlock1(1750,
+				"cb6", 6);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb7 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb7", 7);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb8 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb8", 8);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb9 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb9", 9);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb10 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb10", 10);
 
-    queue.add(cb1);
-    queue.add(cb2);
-    queue.add(cb3);
-    queue.add(cb4);
-    queue.add(cb5);
-    queue.add(cb6);
-    queue.add(cb7);
-    queue.add(cb8);
-    queue.add(cb9);
-    queue.add(cb10);
+		CachedBlockQueue queue = new CachedBlockQueue(10000, 1000);
 
-    // We expect cb1 through cb8 to be in the queue
-    long expectedSize = cb1.heapSize() + cb2.heapSize() + cb3.heapSize() + cb4.heapSize()
-        + cb5.heapSize() + cb6.heapSize() + cb7.heapSize() + cb8.heapSize();
+		queue.add(cb1);
+		queue.add(cb2);
+		queue.add(cb3);
+		queue.add(cb4);
+		queue.add(cb5);
+		queue.add(cb6);
+		queue.add(cb7);
+		queue.add(cb8);
+		queue.add(cb9);
+		queue.add(cb10);
 
-    assertEquals(queue.heapSize(), expectedSize);
+		// We expect cb1 through cb8 to be in the queue
+		long expectedSize = cb1.heapSize() + cb2.heapSize() + cb3.heapSize() + cb4.heapSize() + cb5.heapSize()
+				+ cb6.heapSize() + cb7.heapSize() + cb8.heapSize();
 
-    LinkedList<org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock> blocks =
-        queue.getList();
-    assertEquals(blocks.poll().getName(), "cb1");
-    assertEquals(blocks.poll().getName(), "cb2");
-    assertEquals(blocks.poll().getName(), "cb3");
-    assertEquals(blocks.poll().getName(), "cb4");
-    assertEquals(blocks.poll().getName(), "cb5");
-    assertEquals(blocks.poll().getName(), "cb6");
-    assertEquals(blocks.poll().getName(), "cb7");
-    assertEquals(blocks.poll().getName(), "cb8");
+		assertEquals(queue.heapSize(), expectedSize);
 
-  }
+		LinkedList<org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock> blocks = queue.getList();
+		assertEquals(blocks.poll().getName(), "cb1");
+		assertEquals(blocks.poll().getName(), "cb2");
+		assertEquals(blocks.poll().getName(), "cb3");
+		assertEquals(blocks.poll().getName(), "cb4");
+		assertEquals(blocks.poll().getName(), "cb5");
+		assertEquals(blocks.poll().getName(), "cb6");
+		assertEquals(blocks.poll().getName(), "cb7");
+		assertEquals(blocks.poll().getName(), "cb8");
 
-  @Test
-  public void testQueueSmallBlockEdgeCase() {
+	}
 
-    CachedBlock cb1 = new CachedBlock(1000, "cb1", 1);
-    CachedBlock cb2 = new CachedBlock(1500, "cb2", 2);
-    CachedBlock cb3 = new CachedBlock(1000, "cb3", 3);
-    CachedBlock cb4 = new CachedBlock(1500, "cb4", 4);
-    CachedBlock cb5 = new CachedBlock(1000, "cb5", 5);
-    CachedBlock cb6 = new CachedBlock(1750, "cb6", 6);
-    CachedBlock cb7 = new CachedBlock(1000, "cb7", 7);
-    CachedBlock cb8 = new CachedBlock(1500, "cb8", 8);
-    CachedBlock cb9 = new CachedBlock(1000, "cb9", 9);
-    CachedBlock cb10 = new CachedBlock(1500, "cb10", 10);
+	@Test
+	public void testQueueSmallBlockEdgeCase() {
 
-    CachedBlockQueue queue = new CachedBlockQueue(10000, 1000);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb1 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb1", 1);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb2 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb2", 2);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb3 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb3", 3);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb4 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb4", 4);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb5 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb5", 5);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb6 = TestCachedBlockQueue.mockCachedBlock1(1750,
+				"cb6", 6);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb7 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb7", 7);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb8 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb8", 8);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb9 = TestCachedBlockQueue.mockCachedBlock1(1000,
+				"cb9", 9);
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb10 = TestCachedBlockQueue.mockCachedBlock1(1500,
+				"cb10", 10);
 
-    queue.add(cb1);
-    queue.add(cb2);
-    queue.add(cb3);
-    queue.add(cb4);
-    queue.add(cb5);
-    queue.add(cb6);
-    queue.add(cb7);
-    queue.add(cb8);
-    queue.add(cb9);
-    queue.add(cb10);
+		CachedBlockQueue queue = new CachedBlockQueue(10000, 1000);
 
-    CachedBlock cb0 = new CachedBlock(10 + CachedBlock.PER_BLOCK_OVERHEAD, "cb0", 0);
-    queue.add(cb0);
+		queue.add(cb1);
+		queue.add(cb2);
+		queue.add(cb3);
+		queue.add(cb4);
+		queue.add(cb5);
+		queue.add(cb6);
+		queue.add(cb7);
+		queue.add(cb8);
+		queue.add(cb9);
+		queue.add(cb10);
 
-    // This is older so we must include it, but it will not end up kicking
-    // anything out because (heapSize - cb8.heapSize + cb0.heapSize < maxSize)
-    // and we must always maintain heapSize >= maxSize once we achieve it.
+		org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock cb0 = TestCachedBlockQueue
+				.mockCachedBlock1(10 + CachedBlock.PER_BLOCK_OVERHEAD, "cb0", 0);
+		queue.add(cb0);
 
-    // We expect cb0 through cb8 to be in the queue
-    long expectedSize = cb1.heapSize() + cb2.heapSize() + cb3.heapSize() + cb4.heapSize()
-        + cb5.heapSize() + cb6.heapSize() + cb7.heapSize() + cb8.heapSize() + cb0.heapSize();
+		// This is older so we must include it, but it will not end up kicking
+		// anything out because (heapSize - cb8.heapSize + cb0.heapSize < maxSize)
+		// and we must always maintain heapSize >= maxSize once we achieve it.
 
-    assertEquals(queue.heapSize(), expectedSize);
+		// We expect cb0 through cb8 to be in the queue
+		long expectedSize = cb1.heapSize() + cb2.heapSize() + cb3.heapSize() + cb4.heapSize() + cb5.heapSize()
+				+ cb6.heapSize() + cb7.heapSize() + cb8.heapSize() + cb0.heapSize();
 
-    LinkedList<org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock> blocks =
-        queue.getList();
-    assertEquals(blocks.poll().getName(), "cb0");
-    assertEquals(blocks.poll().getName(), "cb1");
-    assertEquals(blocks.poll().getName(), "cb2");
-    assertEquals(blocks.poll().getName(), "cb3");
-    assertEquals(blocks.poll().getName(), "cb4");
-    assertEquals(blocks.poll().getName(), "cb5");
-    assertEquals(blocks.poll().getName(), "cb6");
-    assertEquals(blocks.poll().getName(), "cb7");
-    assertEquals(blocks.poll().getName(), "cb8");
+		assertEquals(queue.heapSize(), expectedSize);
 
-  }
+		LinkedList<org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock> blocks = queue.getList();
+		assertEquals(blocks.poll().getName(), "cb0");
+		assertEquals(blocks.poll().getName(), "cb1");
+		assertEquals(blocks.poll().getName(), "cb2");
+		assertEquals(blocks.poll().getName(), "cb3");
+		assertEquals(blocks.poll().getName(), "cb4");
+		assertEquals(blocks.poll().getName(), "cb5");
+		assertEquals(blocks.poll().getName(), "cb6");
+		assertEquals(blocks.poll().getName(), "cb7");
+		assertEquals(blocks.poll().getName(), "cb8");
 
-  private static class CachedBlock
-      extends org.apache.accumulo.core.file.blockfile.cache.lru.CachedBlock {
-    public CachedBlock(long heapSize, String name, long accessTime) {
-      super(name, new byte[(int) (heapSize - CachedBlock.PER_BLOCK_OVERHEAD)], accessTime, false);
-    }
-  }
+	}
 }
