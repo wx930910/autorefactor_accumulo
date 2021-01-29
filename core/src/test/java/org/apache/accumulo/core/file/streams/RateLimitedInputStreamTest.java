@@ -21,16 +21,29 @@ import static org.junit.Assert.assertEquals;
 import java.io.InputStream;
 import java.security.SecureRandom;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.accumulo.core.util.ratelimit.RateLimiter;
 import org.apache.hadoop.fs.Seekable;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 public class RateLimitedInputStreamTest {
 
 	@Test
 	public void permitsAreProperlyAcquired() throws Exception {
 		Random randGen = new SecureRandom();
-		MockRateLimiter rateLimiter = new MockRateLimiter();
+		RateLimiter rateLimiter = Mockito.mock(RateLimiter.class);
+		AtomicLong rateLimiterPermitsAcquired = new AtomicLong();
+		try {
+			Mockito.doAnswer((stubInvo) -> {
+				long permits = stubInvo.getArgument(0);
+				rateLimiterPermitsAcquired.addAndGet(permits);
+				return null;
+			}).when(rateLimiter).acquire(Mockito.anyLong());
+		} catch (Exception exception) {
+			exception.printStackTrace();
+		}
 		long bytesRetrieved = 0;
 		try (InputStream is = new RateLimitedInputStream(new RandomInputStream(), rateLimiter)) {
 			for (int i = 0; i < 100; ++i) {
@@ -40,7 +53,7 @@ public class RateLimitedInputStreamTest {
 				bytesRetrieved += count;
 			}
 		}
-		assertEquals(bytesRetrieved, rateLimiter.getPermitsAcquired());
+		assertEquals(bytesRetrieved, rateLimiterPermitsAcquired.get());
 	}
 
 	private static class RandomInputStream extends InputStream implements Seekable {
