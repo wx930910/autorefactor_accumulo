@@ -27,51 +27,51 @@ import org.junit.Test;
 
 public class RateLimitedInputStreamTest {
 
-  @Test
-  public void permitsAreProperlyAcquired() throws Exception {
-    Random randGen = new SecureRandom();
-    MockRateLimiter rateLimiter = new MockRateLimiter();
-    long bytesRetrieved = 0;
-    try (InputStream is = new RateLimitedInputStream(new RandomInputStream(), rateLimiter)) {
-      for (int i = 0; i < 100; ++i) {
-        int count = Math.abs(randGen.nextInt()) % 65536;
-        int countRead = is.read(new byte[count]);
-        assertEquals(count, countRead);
-        bytesRetrieved += count;
-      }
-    }
-    assertEquals(bytesRetrieved, rateLimiter.getPermitsAcquired());
-  }
+	@Test
+	public void permitsAreProperlyAcquired() throws Exception {
+		Random randGen = new SecureRandom();
+		MockRateLimiter rateLimiter = new MockRateLimiter();
+		long bytesRetrieved = 0;
+		try (InputStream is = new RateLimitedInputStream(new RandomInputStream(), rateLimiter)) {
+			for (int i = 0; i < 100; ++i) {
+				int count = Math.abs(randGen.nextInt()) % 65536;
+				int countRead = is.read(new byte[count]);
+				assertEquals(count, countRead);
+				bytesRetrieved += count;
+			}
+		}
+		assertEquals(bytesRetrieved, rateLimiter.getPermitsAcquired());
+	}
 
-  private static class RandomInputStream extends InputStream implements Seekable {
-    private final Random r = new SecureRandom();
+	private static class RandomInputStream extends InputStream implements Seekable {
+		private final Random r = new SecureRandom();
 
-    @Override
-    public int read() {
-      return r.nextInt() & 0xff;
-    }
+		@Override
+		public int read() {
+			return r.nextInt() & 0xff;
+		}
 
-    @Override
-    public void seek(long pos) {
-      throw new UnsupportedOperationException("Not supported yet."); // To change body of generated
-                                                                     // methods, choose Tools |
-                                                                     // Templates.
-    }
+		@Override
+		public void seek(long pos) {
+			throw new UnsupportedOperationException("Not supported yet."); // To change body of generated
+																			// methods, choose Tools |
+																			// Templates.
+		}
 
-    @Override
-    public long getPos() {
-      throw new UnsupportedOperationException("Not supported yet."); // To change body of generated
-                                                                     // methods, choose Tools |
-                                                                     // Templates.
-    }
+		@Override
+		public long getPos() {
+			throw new UnsupportedOperationException("Not supported yet."); // To change body of generated
+																			// methods, choose Tools |
+																			// Templates.
+		}
 
-    @Override
-    public boolean seekToNewSource(long targetPos) {
-      throw new UnsupportedOperationException("Not supported yet."); // To change body of generated
-                                                                     // methods, choose Tools |
-                                                                     // Templates.
-    }
+		@Override
+		public boolean seekToNewSource(long targetPos) {
+			throw new UnsupportedOperationException("Not supported yet."); // To change body of generated
+																			// methods, choose Tools |
+																			// Templates.
+		}
 
-  }
+	}
 
 }
