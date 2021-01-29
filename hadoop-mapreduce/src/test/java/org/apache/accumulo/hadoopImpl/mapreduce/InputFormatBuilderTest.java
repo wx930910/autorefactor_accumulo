@@ -17,7 +17,6 @@
 package org.apache.accumulo.hadoopImpl.mapreduce;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
 import java.util.Optional;
@@ -25,7 +24,6 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 
 import org.apache.accumulo.hadoop.mapreduce.InputFormatBuilder;
-import org.apache.hadoop.mapred.JobConf;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -67,31 +65,14 @@ public class InputFormatBuilderTest {
 			return this;
 		}
 
-		private SortedMap<String, String> getExecutionHints() {
-			return newHints;
-		}
 	}
 
-	private InputTableConfig tableQueryConfig;
 	private InputFormatBuilderImplTest<InputFormatBuilderTest> formatBuilderTest;
 
 	@Before
 	public void setUp() {
-		tableQueryConfig = new InputTableConfig();
 		formatBuilderTest = new InputFormatBuilderImplTest<>(InputFormatBuilderTest.class);
 		formatBuilderTest.table("test");
-	}
-
-	@Test
-	public void testInputFormatBuilder_ClassLoaderContext() {
-		String context = "classLoaderContext";
-
-		InputFormatBuilderImpl<JobConf> formatBuilder = new InputFormatBuilderImpl<>(InputFormatBuilderTest.class);
-		formatBuilder.table("test");
-		formatBuilder.classLoaderContext(context);
-
-		Optional<String> classLoaderContextStr = tableQueryConfig.getContext();
-		assertTrue(classLoaderContextStr.toString().contains("empty")); // returns Optional.empty
 	}
 
 	@Test
@@ -104,16 +85,4 @@ public class InputFormatBuilderTest {
 		assertEquals(context, classLoaderContextStr.get());
 	}
 
-	@Test
-	public void testInputFormatBuilderImplTest_ExecuteHints() {
-		SortedMap<String, String> hints = new TreeMap<>();
-		hints.put("key1", "value1");
-		hints.put("key2", "value2");
-		hints.put("key3", "value3");
-
-		formatBuilderTest.executionHints(hints);
-
-		SortedMap<String, String> executionHints = formatBuilderTest.getExecutionHints();
-		assertEquals(hints.toString(), executionHints.toString());
-	}
 }
