@@ -21,19 +21,19 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.apache.accumulo.core.util.ratelimit.RateLimiter;
 
 public class MockRateLimiter implements RateLimiter {
-  private final AtomicLong permitsAcquired = new AtomicLong();
+	private final AtomicLong permitsAcquired = new AtomicLong();
 
-  @Override
-  public long getRate() {
-    return 0;
-  }
+	@Override
+	public long getRate() {
+		return 0;
+	}
 
-  @Override
-  public void acquire(long permits) {
-    permitsAcquired.addAndGet(permits);
-  }
+	@Override
+	public void acquire(long permits) {
+		permitsAcquired.addAndGet(permits);
+	}
 
-  public long getPermitsAcquired() {
-    return permitsAcquired.get();
-  }
+	public long getPermitsAcquired() {
+		return permitsAcquired.get();
+	}
 }
